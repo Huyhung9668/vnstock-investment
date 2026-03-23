@@ -8,12 +8,12 @@ selection:
   other_top_n: 300
 
 runtime:
-  batch_size: 25
-  batch_sleep_seconds: 15
-  request_delay_seconds: 1.5
-  retry_attempts: 3
-  retry_backoff_seconds: 2.0
-  timeout_seconds: 30
+  batch_size: 10
+  batch_sleep_seconds: 60
+  request_delay_seconds: 3.0
+  retry_attempts: 5
+  retry_backoff_seconds: 10.0
+  timeout_seconds: 60
   checkpoint_every: 25
   resume_from_checkpoint: true
 
