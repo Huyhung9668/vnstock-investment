@@ -1,0 +1,49 @@
+{
+  "run_id": "77ba34d1-752f-449f-9edf-3c050a6fd8c5",
+  "run_date": "2026-03-23T06:08:51.055027",
+  "symbols": [
+    "FPT"
+  ],
+  "mode": "free",
+  "source_used": "free_provider",
+  "files_created": [
+    "C:\\Users\\User\\.codex\\vnstock-investment\\reports\\trade_plan_fpt.md",
+    "C:\\Users\\User\\.codex\\vnstock-investment\\reports\\manifests\\manifest_fpt_77ba34d1-752f-449f-9edf-3c050a6fd8c5.json"
+  ],
+  "warnings": [
+    "Missing optional sections: `breadth_context`"
+  ],
+  "errors": [],
+  "duration_seconds": 16.6528427000012,
+  "data_quality_summary": {
+    "symbol": "FPT",
+    "provider_name": "free_provider",
+    "generated_at": "2026-03-23T06:08:51.055027",
+    "missing_sections": [
+      "breadth_context"
+    ],
+    "overall_status": "medium",
+    "section_statuses": {
+      "breadth_context": {
+        "status": "missing",
+        "present": false
+      },
+      "company": {
+        "status": "ok",
+        "present": true
+      },
+      "financial_summary": {
+        "status": "ok",
+        "present": true
+      },
+      "news_summary": {
+        "status": "ok",
+        "present": true
+      },
+      "price_summary": {
+        "status": "ok",
+        "present": true
+      }
+    }
+  }
+}
