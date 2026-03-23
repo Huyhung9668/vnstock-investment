@@ -43,7 +43,14 @@ class TelegramNotifier:
 
 
 def build_daily_summary_message(summary: dict[str, Any]) -> str:
-    status = "SUCCESS" if summary.get("failed", 0) == 0 else "PARTIAL"
+    failed = int(summary.get("failed", 0) or 0)
+    execution_quality = str(summary.get("execution_quality", "")).strip().lower()
+    if failed > 0:
+        status = "PARTIAL"
+    elif execution_quality == "degraded":
+        status = "DEGRADED"
+    else:
+        status = "SUCCESS"
 
     lines: list[str] = [
         "*Daily Run Report*",
@@ -54,7 +61,11 @@ def build_daily_summary_message(summary: dict[str, Any]) -> str:
         f"- Total scanned: {summary.get('total')}",
         f"- Selected: {len(summary.get('symbols_selected', []))}",
         f"- Success: {summary.get('success')}",
-        f"- Failed: {summary.get('failed')}",
+        f"- Failed: {failed}",
+        f"- Quality: {summary.get('execution_quality', 'unknown')}",
+        "",
+        "*Headline*",
+        str(summary.get("headline", "Chua co headline")),
         "",
         "*Top 10*",
         ", ".join(summary.get("symbols_selected", [])[:10]) or "N/A",
@@ -67,6 +78,12 @@ def build_daily_summary_message(summary: dict[str, Any]) -> str:
         lines.extend([f"- {warning}" for warning in warnings[:5]])
     else:
         lines.append("None")
+
+    next_actions = summary.get("next_actions", [])
+    if isinstance(next_actions, list) and next_actions:
+        lines.append("")
+        lines.append("*Next Actions*")
+        lines.extend([f"- {item}" for item in next_actions[:3]])
 
     lines.append("")
     lines.append("*Artifacts*")

@@ -22,6 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from notifiers.telegram import TelegramNotifier, build_daily_summary_message
 from providers.factory import create_provider
 from services.analysis_builder import build_analysis_package
+from services.daily_briefing_service import build_daily_briefing
 from services.manifest_service import create_manifest, save_manifest
 from services.report_export_service import export_report_bundle
 from services.report_exporter import export_markdown_report
@@ -34,6 +35,7 @@ TOP_SYMBOLS_PATH = PROJECT_ROOT / "data" / "derived" / "top10_symbols.json"
 MARKET_OVERVIEW_PATH = PROJECT_ROOT / "data" / "derived" / "market_overview.json"
 RANKING_TABLE_PATH = PROJECT_ROOT / "data" / "derived" / "universe_scores.csv"
 RAW_SCAN_OUTPUT_PATH = PROJECT_ROOT / "data" / "derived" / "universe_scan_raw.csv"
+DOTENV_PATH = PROJECT_ROOT / ".env"
 
 
 @dataclass(slots=True)
@@ -68,6 +70,7 @@ class RunContext:
     symbol_results: list["SymbolRunResult"] = field(default_factory=list)
     trade_plan_payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
     deep_dive_payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
+    daily_briefing_payload: dict[str, Any] = field(default_factory=dict)
     bundle_output_dir: str | None = None
     bundle_manifest_path: str | None = None
     total_scanned: int = 0
@@ -108,6 +111,24 @@ def configure_logging() -> None:
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(message)s",
     )
+
+
+def load_dotenv_if_present(path: Path = DOTENV_PATH) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        normalized_key = key.strip()
+        if not normalized_key or normalized_key in os.environ:
+            continue
+
+        normalized_value = value.strip().strip('"').strip("'")
+        os.environ[normalized_key] = normalized_value
 
 
 def _log_step_start(name: str) -> None:
@@ -465,6 +486,25 @@ def _build_ranking_from_raw_scan(df: pd.DataFrame) -> pd.DataFrame:
 
     working_df["score"] = score_seed
     return _normalize_ranking_dataframe(working_df)
+
+
+def _serialize_symbol_results(symbol_results: list["SymbolRunResult"]) -> list[DictStrAny]:
+    serialized: list[DictStrAny] = []
+    for item in symbol_results:
+        serialized.append(
+            {
+                "symbol": item.symbol,
+                "status": item.status,
+                "source_used": item.source_used,
+                "fallback_used": item.fallback_used,
+                "degraded_mode": item.degraded_mode,
+                "warnings": list(item.warnings),
+                "errors": list(item.errors),
+                "report_path": item.report_path,
+                "manifest_path": item.manifest_path,
+            }
+        )
+    return serialized
 
 
 def _build_symbol_artifacts(
@@ -864,6 +904,31 @@ def build_trade_plans(runtime_bundle: RuntimeConfigBundle, context: RunContext) 
         _log_step_end_with_counts("build_trade_plans", trade_plans_built=context.trade_plans_built)
 
 
+def compose_daily_briefing(runtime_bundle: RuntimeConfigBundle, context: RunContext) -> None:
+    _log_step_start("compose_daily_briefing")
+    try:
+        _ = runtime_bundle
+        context.daily_briefing_payload = build_daily_briefing(
+            run_id=context.run_id,
+            selection_mode=context.selection_mode,
+            market_overview=context.market_overview or {},
+            ranking_table=context.ranking_table.copy(),
+            symbol_payloads=context.deep_dive_payloads,
+            trade_plan_payloads=context.trade_plan_payloads,
+            symbol_results=_serialize_symbol_results(context.symbol_results),
+            warnings=list(context.job_warnings),
+        )
+        logging.info("daily_briefing_headline=%s", context.daily_briefing_payload.get("headline"))
+    except Exception as exc:
+        _log_error("compose_daily_briefing", exc)
+        _warn_step(context, "compose_daily_briefing", f"failed: {type(exc).__name__}: {exc}")
+    finally:
+        _log_step_end_with_counts(
+            "compose_daily_briefing",
+            opportunities=len(context.daily_briefing_payload.get("top_opportunities", [])),
+        )
+
+
 def export_reports(runtime_bundle: RuntimeConfigBundle, context: RunContext) -> None:
     _log_step_start("export_reports")
     try:
@@ -889,6 +954,7 @@ def export_reports(runtime_bundle: RuntimeConfigBundle, context: RunContext) -> 
             ranking_table=ranking_df,
             deep_dives=context.deep_dive_payloads,
             trade_plans=context.trade_plan_payloads,
+            daily_briefing=context.daily_briefing_payload,
             run_summary={
                 "run_id": context.run_id,
                 "generated_at": datetime.now().isoformat(),
@@ -915,6 +981,8 @@ def export_reports(runtime_bundle: RuntimeConfigBundle, context: RunContext) -> 
             logging.info("market_overview_report=%s", export_result.market_overview_path)
         if export_result.ranking_table_path:
             logging.info("ranking_report=%s", export_result.ranking_table_path)
+        if export_result.daily_briefing_path:
+            logging.info("daily_briefing_report=%s", export_result.daily_briefing_path)
         if export_result.run_summary_path:
             logging.info("run_summary_report=%s", export_result.run_summary_path)
 
@@ -961,6 +1029,7 @@ def build_final_summary(runtime_bundle: RuntimeConfigBundle, context: RunContext
 
     summary = {
         "run_id": context.run_id,
+        "headline": context.daily_briefing_payload.get("headline"),
         "selection_mode": context.selection_mode,
         "symbols_selected": list(context.symbols_selected),
         "total": total_candidates,
@@ -983,6 +1052,8 @@ def build_final_summary(runtime_bundle: RuntimeConfigBundle, context: RunContext
         "selected": context.total_selected,
         "deep_dives_built": context.deep_dives_built,
         "trade_plans_built": context.trade_plans_built,
+        "next_actions": list(context.daily_briefing_payload.get("next_actions", [])),
+        "execution_quality": context.daily_briefing_payload.get("execution_status", {}).get("quality", "unknown"),
     }
 
     if context.bundle_output_dir:
@@ -1044,6 +1115,7 @@ def send_notification(runtime_bundle: RuntimeConfigBundle, context: RunContext) 
 
 def main() -> DictStrAny:
     configure_logging()
+    load_dotenv_if_present()
     args = parse_args()
     runtime_bundle = load_runtime_config(Path(args.config_dir).resolve())
     context = build_run_context(runtime_bundle)
@@ -1083,6 +1155,12 @@ def main() -> DictStrAny:
     except BaseException as exc:
         _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected build_trade_plans error: {type(exc).__name__}: {exc}")
+
+    try:
+        compose_daily_briefing(runtime_bundle, context)
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
+        _warn(context, f"unexpected compose_daily_briefing error: {type(exc).__name__}: {exc}")
 
     try:
         export_reports(runtime_bundle, context)

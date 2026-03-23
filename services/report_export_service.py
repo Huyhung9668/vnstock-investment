@@ -20,6 +20,7 @@ class ReportBundleExportResult:
     generated_at: str
     output_dir: str
     manifest_path: str | None
+    daily_briefing_path: str | None
     run_summary_path: str | None
     market_overview_path: str | None
     ranking_table_path: str | None
@@ -40,6 +41,7 @@ def export_report_bundle(
     ranking_table: pd.DataFrame | list[dict[str, Any]] | None = None,
     deep_dives: dict[str, dict[str, Any]] | None = None,
     trade_plans: dict[str, dict[str, Any]] | None = None,
+    daily_briefing: dict[str, Any] | None = None,
     run_summary: dict[str, Any] | None = None,
     warnings: list[str] | None = None,
 ) -> ReportBundleExportResult:
@@ -57,6 +59,7 @@ def export_report_bundle(
     normalized_ranking = _normalize_ranking_table(ranking_table)
     normalized_deep_dives = _normalize_symbol_mapping(deep_dives)
     normalized_trade_plans = _normalize_symbol_mapping(trade_plans)
+    normalized_daily_briefing = _normalize_dict(daily_briefing)
     normalized_run_summary = _normalize_dict(run_summary)
     collected_warnings = _normalize_string_list(warnings)
     files_created: list[str] = []
@@ -110,6 +113,16 @@ def export_report_bundle(
         warning_prefix="trade_plan",
     )
 
+    briefing_content = _build_daily_briefing_content(normalized_daily_briefing)
+    daily_briefing_markdown, daily_briefing_html = _safe_write_content_pair(
+        markdown_path=output_dir / "daily_briefing.md",
+        html_path=output_dir / "daily_briefing.html",
+        content=briefing_content,
+        files_created=files_created,
+        warnings=collected_warnings,
+        warning_prefix="daily_briefing",
+    )
+
     run_summary_payload = {
         **normalized_run_summary,
         "run_id": normalized_run_id,
@@ -142,6 +155,8 @@ def export_report_bundle(
         market_overview_html=market_overview_html,
         ranking_top10_markdown=ranking_top10_markdown,
         ranking_top10_html=ranking_top10_html,
+        daily_briefing_markdown=daily_briefing_markdown,
+        daily_briefing_html=daily_briefing_html,
         deep_dive_markdown_paths=deep_dive_markdown_paths,
         deep_dive_html_paths=_sorted_path_values(deep_dive_html_map),
         trade_plan_markdown_paths=trade_plan_markdown_paths,
@@ -170,6 +185,7 @@ def export_report_bundle(
         generated_at=generated_at,
         output_dir=str(output_dir),
         manifest_path=manifest_path,
+        daily_briefing_path=daily_briefing_markdown,
         run_summary_path=run_summary_markdown,
         market_overview_path=market_overview_markdown,
         ranking_table_path=ranking_top10_markdown,
@@ -428,6 +444,67 @@ def _build_trade_plan_content(symbol: str, payload: dict[str, Any]) -> dict[str,
     }
 
 
+def _build_daily_briefing_content(payload: dict[str, Any]) -> dict[str, Any]:
+    market_view = _ensure_dict(payload.get("market_view"))
+    execution_status = _ensure_dict(payload.get("execution_status"))
+    top_opportunities = payload.get("top_opportunities")
+    if not isinstance(top_opportunities, list):
+        top_opportunities = []
+
+    opportunity_rows = []
+    for item in top_opportunities:
+        if not isinstance(item, dict):
+            continue
+        opportunity_rows.append(
+            {
+                "symbol": item.get("symbol", ""),
+                "setup_type": item.get("setup_type", ""),
+                "trigger": item.get("trigger", ""),
+                "risk_reward": item.get("risk_reward", ""),
+                "degraded_mode": item.get("degraded_mode", False),
+            }
+        )
+
+    return {
+        "title": "Daily Briefing",
+        "sections": [
+            {
+                "title": "Headline",
+                "items": [
+                    ("run_id", payload.get("run_id")),
+                    ("headline", payload.get("headline")),
+                    ("selection_mode", payload.get("selection_mode")),
+                ],
+            },
+            {
+                "title": "Market Context",
+                "items": [
+                    ("summary", market_view.get("summary")),
+                    ("regime", market_view.get("regime")),
+                    ("breadth", market_view.get("breadth")),
+                    ("volatility", market_view.get("volatility")),
+                ],
+            },
+            {
+                "title": "Execution Status",
+                "items": list(execution_status.items()),
+            },
+            {
+                "title": "Top Opportunities",
+                "table": pd.DataFrame(opportunity_rows),
+            },
+            {
+                "title": "Next Actions",
+                "bullets": _normalize_string_list(payload.get("next_actions")) or ["Chua co next actions."],
+            },
+            {
+                "title": "Warnings",
+                "bullets": _normalize_string_list(payload.get("warnings")) or ["Khong co warning dang ke."],
+            },
+        ],
+    }
+
+
 def _build_run_summary_content(*, run_summary: dict[str, Any], warnings: list[str]) -> dict[str, Any]:
     return {
         "title": "Run Summary",
@@ -528,6 +605,8 @@ def _build_manifest_payload(
     market_overview_html: str | None,
     ranking_top10_markdown: str | None,
     ranking_top10_html: str | None,
+    daily_briefing_markdown: str | None,
+    daily_briefing_html: str | None,
     deep_dive_markdown_paths: list[str],
     deep_dive_html_paths: list[str],
     trade_plan_markdown_paths: list[str],
@@ -548,6 +627,8 @@ def _build_manifest_payload(
         "market_overview_html": market_overview_html,
         "ranking_top10_markdown": ranking_top10_markdown,
         "ranking_top10_html": ranking_top10_html,
+        "daily_briefing_markdown": daily_briefing_markdown,
+        "daily_briefing_html": daily_briefing_html,
         "deep_dive_markdown_paths": deep_dive_markdown_paths,
         "deep_dive_html_paths": deep_dive_html_paths,
         "trade_plan_markdown_paths": trade_plan_markdown_paths,
