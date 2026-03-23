@@ -140,6 +140,11 @@ def _warn_symbol(context: RunContext, symbol: str, message: str) -> None:
     _warn(context, f"symbol={symbol} | {message}")
 
 
+def _re_raise_if_keyboard_interrupt(exc: BaseException) -> None:
+    if isinstance(exc, KeyboardInterrupt):
+        raise exc
+
+
 def _log_error(step_name: str, exc: Exception, *, symbol: str | None = None) -> None:
     prefix = f"step={step_name}"
     if symbol:
@@ -1045,47 +1050,56 @@ def main() -> DictStrAny:
 
     try:
         load_market_overview_if_enabled(runtime_bundle, context)
-    except Exception as exc:
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected load_market_overview_if_enabled error: {type(exc).__name__}: {exc}")
 
     try:
         scan_universe(runtime_bundle, context)
-    except Exception as exc:
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected scan_universe error: {type(exc).__name__}: {exc}")
 
     try:
         rank_candidates(runtime_bundle, context)
-    except Exception as exc:
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected rank_candidates error: {type(exc).__name__}: {exc}")
 
     try:
         select_top_symbols(runtime_bundle, context)
-    except Exception as exc:
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected select_top_symbols error: {type(exc).__name__}: {exc}")
 
     try:
         build_deep_dive_for_symbols(runtime_bundle, context)
-    except Exception as exc:
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected build_deep_dive_for_symbols error: {type(exc).__name__}: {exc}")
 
     try:
         build_trade_plans(runtime_bundle, context)
-    except Exception as exc:
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected build_trade_plans error: {type(exc).__name__}: {exc}")
 
     try:
         export_reports(runtime_bundle, context)
-    except Exception as exc:
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected export_reports error: {type(exc).__name__}: {exc}")
 
     try:
         write_manifest(runtime_bundle, context)
-    except Exception as exc:
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected write_manifest error: {type(exc).__name__}: {exc}")
 
     try:
         send_notification(runtime_bundle, context)
-    except Exception as exc:
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected send_notification error: {type(exc).__name__}: {exc}")
 
     summary = build_final_summary(runtime_bundle, context)
