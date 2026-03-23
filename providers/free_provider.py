@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 from vnstock import Vnstock
 
-from providers.base import TradePlanningProvider
+from providers.base import ProviderSchemaError, ProviderTimeoutError, TradePlanningProvider
 
 
 DictStrAny = dict[str, Any]
@@ -29,26 +29,31 @@ class FreeTradePlanningProvider(TradePlanningProvider):
 
     def health_check(self) -> dict[str, Any]:
         """Return provider health and readiness details."""
-        return {
+        return self.merge_with_metadata(
+            payload={
             "status": "ok",
             "provider": self.provider_name(),
             "source": self.source,
             "lookback_days": self.lookback_days,
-        }
+            },
+            scope="provider",
+        )
 
     def get_company_profile(self, symbol: str) -> dict[str, Any]:
         """Return normalized company profile data for a symbol."""
         stock_client = self._get_stock_client(symbol)
         company_client = self._get_company_client(stock_client)
-        overview_df = self._safe_dataframe_call(company_client, "overview")
-
-        if overview_df is None or overview_df.empty:
-            raise ValueError(f"No company overview returned for {symbol}")
+        overview_df = self._required_dataframe_call(
+            company_client,
+            method_name="overview",
+            section_name="company_profile",
+            symbol=symbol,
+        )
 
         row = overview_df.iloc[0].to_dict()
-        profile = self._normalize_record(row)
-        profile.setdefault("symbol", symbol.upper())
-        return profile
+        profile = self._normalize_company_profile(row, symbol)
+        profile["source"] = self.source
+        return self.merge_with_metadata(payload=profile, symbol=symbol)
 
     def get_price_summary(self, symbol: str) -> dict[str, Any]:
         """Return normalized price summary data for a symbol."""
@@ -93,7 +98,8 @@ class FreeTradePlanningProvider(TradePlanningProvider):
         if not low_series.empty:
             summary["low_min"] = round(float(low_series.min()), 4)
 
-        return summary
+        summary["source"] = self.source
+        return self.merge_with_metadata(payload=summary, symbol=symbol)
 
     def get_financial_summary(self, symbol: str) -> dict[str, Any] | None:
         """Return normalized financial summary data if available."""
@@ -111,26 +117,41 @@ class FreeTradePlanningProvider(TradePlanningProvider):
 
         summary: DictStrAny = {}
         for method_name, kwargs in candidates:
-            df = self._safe_dataframe_call(finance_client, method_name, **kwargs)
+            df = self._optional_dataframe_call(finance_client, method_name, **kwargs)
             if df is not None and not df.empty:
                 summary[method_name] = self._normalize_record(df.iloc[0].to_dict())
 
-        return summary or None
+        if not summary:
+            return None
+
+        return self.merge_with_metadata(
+            payload={
+                "status": "available",
+                "source": self.source,
+                "sections": summary,
+            },
+            symbol=symbol,
+        )
 
     def get_news_summary(self, symbol: str) -> dict[str, Any] | None:
         """Return normalized news summary data if available."""
         stock_client = self._get_stock_client(symbol)
         company_client = self._get_company_client(stock_client)
-        news_df = self._safe_dataframe_call(company_client, "news")
+        news_df = self._optional_dataframe_call(company_client, "news")
 
         if news_df is None or news_df.empty:
             return None
 
         latest_news = self._normalize_record(news_df.iloc[0].to_dict())
-        return {
-            "article_count": int(len(news_df)),
-            "latest": latest_news,
-        }
+        return self.merge_with_metadata(
+            payload={
+                "status": "available",
+                "source": self.source,
+                "article_count": int(len(news_df)),
+                "latest": latest_news,
+            },
+            symbol=symbol,
+        )
 
     def get_breadth_context(self) -> dict[str, Any] | None:
         """Return normalized market breadth context if available."""
@@ -164,11 +185,17 @@ class FreeTradePlanningProvider(TradePlanningProvider):
 
         end_date = date.today()
         start_date = end_date - timedelta(days=self.lookback_days)
-        result = history_method(start=start_date.isoformat(), end=end_date.isoformat())
-        df = self._coerce_dataframe(result)
+        try:
+            result = history_method(start=start_date.isoformat(), end=end_date.isoformat())
+        except TimeoutError as exc:
+            raise ProviderTimeoutError(f"Timeout while fetching price_summary for {symbol}") from exc
+        except Exception as exc:
+            raise ValueError(f"Failed to fetch price_summary for {symbol}: {type(exc).__name__}: {exc}") from exc
 
-        if df is None or df.empty:
-            raise ValueError(f"No price history returned for {symbol}")
+        df = self._coerce_dataframe(result, section_name="price_summary")
+
+        if df.empty:
+            raise ValueError(f"Empty payload returned for price_summary: {symbol}")
 
         normalized_df = df.copy()
         if "time" in normalized_df.columns:
@@ -177,7 +204,39 @@ class FreeTradePlanningProvider(TradePlanningProvider):
 
         return normalized_df
 
-    def _safe_dataframe_call(self, client: Any, method_name: str, **kwargs: Any) -> pd.DataFrame | None:
+    def _required_dataframe_call(
+        self,
+        client: Any,
+        *,
+        method_name: str,
+        section_name: str,
+        symbol: str,
+        **kwargs: Any,
+    ) -> pd.DataFrame:
+        method = getattr(client, method_name, None)
+        if method is None:
+            raise AttributeError(f"{section_name} method `{method_name}` is not available for {symbol}")
+
+        try:
+            result = method(**kwargs)
+        except TypeError:
+            try:
+                result = method()
+            except TimeoutError as exc:
+                raise ProviderTimeoutError(f"Timeout while fetching {section_name} for {symbol}") from exc
+            except Exception as exc:
+                raise ValueError(f"Failed to fetch {section_name} for {symbol}: {type(exc).__name__}: {exc}") from exc
+        except TimeoutError as exc:
+            raise ProviderTimeoutError(f"Timeout while fetching {section_name} for {symbol}") from exc
+        except Exception as exc:
+            raise ValueError(f"Failed to fetch {section_name} for {symbol}: {type(exc).__name__}: {exc}") from exc
+
+        df = self._coerce_dataframe(result, section_name=section_name)
+        if df.empty:
+            raise ValueError(f"Empty payload returned for {section_name}: {symbol}")
+        return df
+
+    def _optional_dataframe_call(self, client: Any, method_name: str, **kwargs: Any) -> pd.DataFrame | None:
         method = getattr(client, method_name, None)
         if method is None:
             return None
@@ -192,17 +251,24 @@ class FreeTradePlanningProvider(TradePlanningProvider):
         except Exception:
             return None
 
-        return self._coerce_dataframe(result)
-
-    def _coerce_dataframe(self, result: Any) -> pd.DataFrame | None:
-        if result is None:
+        try:
+            df = self._coerce_dataframe(result, section_name=method_name)
+        except ProviderSchemaError:
             return None
+
+        if df.empty:
+            return None
+        return df
+
+    def _coerce_dataframe(self, result: Any, *, section_name: str) -> pd.DataFrame:
+        if result is None:
+            raise ProviderSchemaError(f"{section_name} returned None")
         if isinstance(result, pd.DataFrame):
             return result
         try:
             df = pd.DataFrame(result)
         except Exception:
-            return None
+            raise ProviderSchemaError(f"{section_name} returned an invalid schema")
         return df
 
     def _normalize_record(self, payload: dict[str, Any]) -> DictStrAny:
@@ -211,6 +277,29 @@ class FreeTradePlanningProvider(TradePlanningProvider):
             if pd.isna(value):
                 continue
             normalized[str(key)] = self._normalize_value(value)
+        return normalized
+
+    def _normalize_company_profile(self, payload: dict[str, Any], symbol: str) -> DictStrAny:
+        normalized = self._normalize_record(payload)
+        normalized["symbol"] = symbol.upper()
+
+        company_name = self._first_non_empty_string(
+            normalized.get("name"),
+            normalized.get("company_name"),
+            normalized.get("organ_name"),
+            normalized.get("short_name"),
+        )
+        if company_name is not None:
+            normalized.setdefault("name", company_name)
+            normalized.setdefault("company_name", company_name)
+
+        short_name = self._first_non_empty_string(
+            normalized.get("short_name"),
+            normalized.get("ticker"),
+        )
+        if short_name is not None:
+            normalized.setdefault("short_name", short_name)
+
         return normalized
 
     def _normalize_value(self, value: Any) -> Any:
@@ -244,3 +333,9 @@ class FreeTradePlanningProvider(TradePlanningProvider):
         if base == 0:
             return 0.0
         return ((current - base) / base) * 100
+
+    def _first_non_empty_string(self, *values: Any) -> str | None:
+        for value in values:
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None

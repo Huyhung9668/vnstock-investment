@@ -9,6 +9,7 @@ from models.analysis_package import AnalysisPackage
 
 DictStrAny = dict[str, Any]
 DEFAULT_REPORTS_DIR = Path("reports")
+DATA_QUALITY_HEADER = "## Độ phủ dữ liệu / Chất lượng dữ liệu"
 
 
 @dataclass(slots=True)
@@ -21,7 +22,10 @@ class ReportExportResult:
 
 
 def build_data_quality_summary(analysis_package: AnalysisPackage) -> DictStrAny:
-    provider_name = _stringify(analysis_package.provider_metadata.get("provider_name"), default="unknown")
+    provider_name = _stringify(
+        analysis_package.provider_metadata.get("provider_name"),
+        default="unknown",
+    )
     section_statuses = _extract_section_statuses(analysis_package.data_quality)
     overall_status = _derive_overall_status(
         missing_sections=analysis_package.missing_sections,
@@ -40,18 +44,18 @@ def build_data_quality_summary(analysis_package: AnalysisPackage) -> DictStrAny:
 
 def ensure_data_quality_section(markdown_text: str, analysis_package: AnalysisPackage) -> str:
     normalized_markdown = _validate_markdown_text(markdown_text)
-    if "## Data coverage / Data quality" in normalized_markdown:
+    if DATA_QUALITY_HEADER in normalized_markdown:
         return normalized_markdown
 
     summary = build_data_quality_summary(analysis_package)
     missing_text = _format_missing_sections(summary["missing_sections"])
 
     section_lines = [
-        "## Data coverage / Data quality",
-        f"- provider: `{summary['provider_name']}`",
-        f"- generated_at: `{summary['generated_at']}`",
-        f"- missing_sections: {missing_text}",
-        f"- overall_status: `{summary['overall_status']}`",
+        DATA_QUALITY_HEADER,
+        f"- Nhà cung cấp: `{summary['provider_name']}`",
+        f"- Thời điểm tạo: `{summary['generated_at']}`",
+        f"- Phần còn thiếu: {missing_text}",
+        f"- Mức chất lượng tổng quan: `{summary['overall_status']}`",
     ]
 
     return normalized_markdown.rstrip() + "\n\n" + "\n".join(section_lines) + "\n"
@@ -75,6 +79,10 @@ def export_markdown_report(
     try:
         resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
         resolved_output_path.write_text(normalized_markdown, encoding="utf-8")
+        if not resolved_output_path.exists():
+            raise FileNotFoundError(
+                f"Expected exported markdown file was not created: {resolved_output_path}"
+            )
         files_created.append(str(resolved_output_path))
     except Exception as exc:
         errors.append(f"{type(exc).__name__}: {exc}")
@@ -166,20 +174,20 @@ def _build_warnings(analysis_package: AnalysisPackage) -> list[str]:
 
     if analysis_package.missing_sections:
         warnings.append(
-            "Missing optional sections: "
+            "Thiếu các phần dữ liệu tùy chọn: "
             + ", ".join(f"`{item}`" for item in sorted(set(analysis_package.missing_sections)))
         )
 
     provider_health = analysis_package.data_quality.get("provider_health")
     if _provider_health_has_error(provider_health):
-        warnings.append("Provider health indicates a non-ok status.")
+        warnings.append("Trạng thái sức khỏe của provider không ở mức bình thường.")
 
     return warnings
 
 
 def _format_missing_sections(missing_sections: list[str]) -> str:
     if not missing_sections:
-        return "`none`"
+        return "`không có`"
     return ", ".join(f"`{item}`" for item in sorted(set(missing_sections)))
 
 

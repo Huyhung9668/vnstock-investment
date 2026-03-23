@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar
+from zoneinfo import ZoneInfo
 
 
 DictStrAny = dict[str, Any]
+VIETNAM_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 @dataclass(slots=True)
@@ -23,7 +25,7 @@ class AnalysisPackage:
     data_quality: DictStrAny = field(default_factory=dict)
     missing_sections: list[str] = field(default_factory=list)
     provider_metadata: DictStrAny = field(default_factory=dict)
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(VIETNAM_TZ))
 
     OPTIONAL_SECTION_FIELDS: ClassVar[tuple[str, ...]] = (
         "financial_summary",
@@ -165,7 +167,7 @@ def _coerce_symbol(value: Any) -> str:
 
 def _coerce_datetime(value: Any) -> datetime:
     if value is None:
-        return datetime.utcnow()
+        return datetime.now(VIETNAM_TZ)
     if isinstance(value, datetime):
         return value
     if isinstance(value, str):
