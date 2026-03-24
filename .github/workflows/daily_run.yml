@@ -26,6 +26,11 @@ jobs:
       MARKET_PROVIDER: ${{ secrets.MARKET_PROVIDER }}
       NEWS_PROVIDER: ${{ secrets.NEWS_PROVIDER }}
       FINANCIALS_PROVIDER: ${{ secrets.FINANCIALS_PROVIDER }}
+      AI_ANALYSIS_ENABLED: ${{ secrets.AI_ANALYSIS_ENABLED }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+      OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+      OPENAI_TIMEOUT_SECONDS: ${{ secrets.OPENAI_TIMEOUT_SECONDS }}
 
     steps:
       - name: Checkout repository
@@ -79,7 +84,7 @@ jobs:
           PY
 
       - name: Run daily pipeline
-        run: python scripts/daily_run.py --config-dir config/ci
+        run: python scripts/run_trading_terminal.py --config-dir config/ci --ai-mode api
 
       - name: Upload artifacts
         if: always()

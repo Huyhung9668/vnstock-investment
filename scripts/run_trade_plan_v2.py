@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING
@@ -18,6 +19,15 @@ if TYPE_CHECKING:
 
 
 REPORTS_DIR = PROJECT_ROOT / "reports"
+
+
+@dataclass(slots=True)
+class TradePlanRunResult:
+    symbol: str
+    markdown: str
+    output_path: str
+    files_created: list[str]
+    warnings: list[str]
 
 
 def parse_args() -> argparse.Namespace:
@@ -66,7 +76,7 @@ def create_provider() -> "TradePlanningProvider":
     return FreeTradePlanningProvider()
 
 
-def run(symbol: str) -> str:
+def generate_trade_plan(symbol: str) -> TradePlanRunResult:
     normalized_symbol = normalize_symbol(symbol)
     provider = create_provider()
     analysis_package = build_analysis_package(provider, normalized_symbol)
@@ -76,7 +86,18 @@ def run(symbol: str) -> str:
     output_path = build_report_path(normalized_symbol)
     output_path.write_text(markdown, encoding="utf-8")
 
-    return markdown
+    return TradePlanRunResult(
+        symbol=normalized_symbol,
+        markdown=markdown,
+        output_path=str(output_path),
+        files_created=[str(output_path)],
+        warnings=[],
+    )
+
+
+def run(symbol: str) -> str:
+    result = generate_trade_plan(symbol)
+    return result.markdown
 
 
 def main() -> int:
@@ -85,8 +106,8 @@ def main() -> int:
     if not symbol:
         raise ValueError("symbol is required. Use `python scripts/run_trade_plan_v2.py FPT` or `--symbol FPT`.")
 
-    markdown = run(symbol)
-    print(markdown, end="")
+    result = generate_trade_plan(symbol)
+    print(result.markdown, end="")
     return 0
 
 

@@ -21,6 +21,7 @@ class ReportBundleExportResult:
     output_dir: str
     manifest_path: str | None
     daily_briefing_path: str | None
+    market_analysis_report_path: str | None
     run_summary_path: str | None
     market_overview_path: str | None
     ranking_table_path: str | None
@@ -122,6 +123,15 @@ def export_report_bundle(
         warnings=collected_warnings,
         warning_prefix="daily_briefing",
     )
+    market_analysis_content = _build_market_analysis_report_content(normalized_daily_briefing)
+    market_analysis_markdown, market_analysis_html = _safe_write_content_pair(
+        markdown_path=output_dir / "market_analysis_report.md",
+        html_path=output_dir / "market_analysis_report.html",
+        content=market_analysis_content,
+        files_created=files_created,
+        warnings=collected_warnings,
+        warning_prefix="market_analysis_report",
+    )
 
     run_summary_payload = {
         **normalized_run_summary,
@@ -157,6 +167,8 @@ def export_report_bundle(
         ranking_top10_html=ranking_top10_html,
         daily_briefing_markdown=daily_briefing_markdown,
         daily_briefing_html=daily_briefing_html,
+        market_analysis_report_markdown=market_analysis_markdown,
+        market_analysis_report_html=market_analysis_html,
         deep_dive_markdown_paths=deep_dive_markdown_paths,
         deep_dive_html_paths=_sorted_path_values(deep_dive_html_map),
         trade_plan_markdown_paths=trade_plan_markdown_paths,
@@ -186,6 +198,7 @@ def export_report_bundle(
         output_dir=str(output_dir),
         manifest_path=manifest_path,
         daily_briefing_path=daily_briefing_markdown,
+        market_analysis_report_path=market_analysis_markdown,
         run_summary_path=run_summary_markdown,
         market_overview_path=market_overview_markdown,
         ranking_table_path=ranking_top10_markdown,
@@ -194,6 +207,7 @@ def export_report_bundle(
         html_paths={
             "market_overview": market_overview_html,
             "ranking_top10": ranking_top10_html,
+            "market_analysis_report": market_analysis_html,
             "deep_dives": deep_dive_html_map,
             "trade_plans": trade_plan_html_map,
             "run_summary": run_summary_html,
@@ -447,6 +461,12 @@ def _build_trade_plan_content(symbol: str, payload: dict[str, Any]) -> dict[str,
 def _build_daily_briefing_content(payload: dict[str, Any]) -> dict[str, Any]:
     market_view = _ensure_dict(payload.get("market_view"))
     execution_status = _ensure_dict(payload.get("execution_status"))
+    ai_analysis = _ensure_dict(payload.get("ai_analysis"))
+    market_synthesis = _ensure_dict(payload.get("market_synthesis"))
+    chief_analysis = _ensure_dict(payload.get("chief_analysis"))
+    skill_pipeline = _ensure_dict(payload.get("skill_pipeline"))
+    normalized_runtime = _ensure_dict(payload.get("normalized_runtime"))
+    news_context = _ensure_dict(payload.get("news_context"))
     top_opportunities = payload.get("top_opportunities")
     if not isinstance(top_opportunities, list):
         top_opportunities = []
@@ -465,8 +485,72 @@ def _build_daily_briefing_content(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
+    ai_note_rows = []
+    for item in ai_analysis.get("top_symbol_notes", []):
+        if not isinstance(item, dict):
+            continue
+        ai_note_rows.append(
+            {
+                "symbol": item.get("symbol", ""),
+                "note": item.get("note", ""),
+            }
+        )
+
+    chief_sections: list[dict[str, Any]] = []
+    for section in chief_analysis.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        chief_sections.append(
+            {
+                "title": section.get("title"),
+                "paragraphs": section.get("paragraphs"),
+                "bullets": section.get("bullets"),
+            }
+        )
+
+    synthesis_focus_rows = []
+    for item in market_synthesis.get("top_stock_focus", []):
+        if not isinstance(item, dict):
+            continue
+        synthesis_focus_rows.append(
+            {
+                "symbol": item.get("symbol", ""),
+                "setup_type": item.get("setup_type", ""),
+                "trigger": item.get("trigger", ""),
+                "risk_reward": item.get("risk_reward", ""),
+                "degraded_mode": item.get("degraded_mode", False),
+            }
+        )
+
+    skill_stage_rows = []
+    for name, stage in skill_pipeline.get("stages", {}).items():
+        if not isinstance(stage, dict):
+            continue
+        skill_stage_rows.append(
+            {
+                "skill_stage": name,
+                "status": stage.get("status", ""),
+                "summary": stage.get("summary", ""),
+            }
+        )
+
+    news_symbol_rows = []
+    for symbol, summary in news_context.get("symbol_summaries", {}).items():
+        if not isinstance(summary, dict):
+            continue
+        news_symbol_rows.append(
+            {
+                "symbol": symbol,
+                "news_count": summary.get("news_count", 0),
+                "news_signal": summary.get("news_signal", 0.0),
+                "sentiment_summary": summary.get("sentiment_summary", ""),
+                "catalyst_tags": ", ".join(_normalize_string_list(summary.get("catalyst_tags"))),
+                "risk_tags": ", ".join(_normalize_string_list(summary.get("risk_tags"))),
+            }
+        )
+
     return {
-        "title": "Daily Briefing",
+        "title": chief_analysis.get("title") or "Daily Briefing",
         "sections": [
             {
                 "title": "Headline",
@@ -474,8 +558,16 @@ def _build_daily_briefing_content(payload: dict[str, Any]) -> dict[str, Any]:
                     ("run_id", payload.get("run_id")),
                     ("headline", payload.get("headline")),
                     ("selection_mode", payload.get("selection_mode")),
+                    ("update_line", chief_analysis.get("update_line")),
+                    ("stance", chief_analysis.get("stance")),
+                    ("confidence", chief_analysis.get("confidence")),
                 ],
             },
+            {
+                "title": "Executive Summary",
+                "paragraphs": [chief_analysis.get("summary")] if chief_analysis.get("summary") else [],
+            },
+            *chief_sections,
             {
                 "title": "Market Context",
                 "items": [
@@ -490,18 +582,228 @@ def _build_daily_briefing_content(payload: dict[str, Any]) -> dict[str, Any]:
                 "items": list(execution_status.items()),
             },
             {
+                "title": "AI Interpretation",
+                "items": [
+                    ("ai_headline", ai_analysis.get("headline")),
+                    ("market_story", ai_analysis.get("market_story")),
+                    ("portfolio_focus", ai_analysis.get("portfolio_focus")),
+                    ("model", ai_analysis.get("model")),
+                ],
+            },
+            {
                 "title": "Top Opportunities",
                 "table": pd.DataFrame(opportunity_rows),
+            },
+            {
+                "title": "AI Notes By Symbol",
+                "table": pd.DataFrame(ai_note_rows),
+            },
+            {
+                "title": "Synthesis Focus Table",
+                "table": pd.DataFrame(synthesis_focus_rows),
+            },
+            {
+                "title": "Skill Pipeline Stages",
+                "table": pd.DataFrame(skill_stage_rows),
+            },
+            {
+                "title": "Runtime Normalization",
+                "items": list(normalized_runtime.items()),
+            },
+            {
+                "title": "News Context",
+                "items": [
+                    ("status", news_context.get("status")),
+                    ("selected_symbol_count", news_context.get("selected_symbol_count")),
+                    ("symbols_with_news_context", news_context.get("symbols_with_news_context")),
+                    ("news_items_total", news_context.get("news_items_total")),
+                    ("market_sentiment_summary", _ensure_dict(news_context.get("market_summary")).get("market_sentiment_summary")),
+                ],
+            },
+            {
+                "title": "News By Symbol",
+                "table": pd.DataFrame(news_symbol_rows),
             },
             {
                 "title": "Next Actions",
                 "bullets": _normalize_string_list(payload.get("next_actions")) or ["Chua co next actions."],
             },
             {
+                "title": "Synthesis Action Plan",
+                "bullets": _normalize_string_list(market_synthesis.get("action_plan"))
+                or ["Chua co synthesis action plan."],
+            },
+            {
+                "title": "Synthesis Risk Watch",
+                "bullets": _normalize_string_list(market_synthesis.get("risk_watch"))
+                or ["Chua co synthesis risk watch."],
+            },
+            {
+                "title": "AI Action Plan",
+                "bullets": _normalize_string_list(ai_analysis.get("action_plan")) or ["AI chua de xuat hanh dong them."],
+            },
+            {
+                "title": "AI Risk Alerts",
+                "bullets": _normalize_string_list(ai_analysis.get("risk_alerts")) or ["AI chua co canh bao bo sung."],
+            },
+            {
                 "title": "Warnings",
                 "bullets": _normalize_string_list(payload.get("warnings")) or ["Khong co warning dang ke."],
             },
         ],
+    }
+
+
+def _build_market_analysis_report_content(payload: dict[str, Any]) -> dict[str, Any]:
+    chief_analysis = _ensure_dict(payload.get("chief_analysis"))
+    market_synthesis = _ensure_dict(payload.get("market_synthesis"))
+    terminal_orchestration = _ensure_dict(payload.get("terminal_orchestration"))
+    skill_pipeline = _ensure_dict(payload.get("skill_pipeline"))
+    normalized_runtime = _ensure_dict(payload.get("normalized_runtime"))
+    news_context = _ensure_dict(payload.get("news_context"))
+    ai_analysis = _ensure_dict(payload.get("ai_analysis"))
+
+    sections: list[dict[str, Any]] = [
+        {
+            "title": "Meta",
+            "items": [
+                ("run_id", payload.get("run_id")),
+                ("headline", payload.get("headline")),
+                ("selection_mode", payload.get("selection_mode")),
+                ("update_line", chief_analysis.get("update_line")),
+                ("terminal_mode", terminal_orchestration.get("mode")),
+                ("terminal_summary", terminal_orchestration.get("summary")),
+            ],
+        },
+        {
+            "title": "Executive Summary",
+            "paragraphs": [chief_analysis.get("summary")] if chief_analysis.get("summary") else [],
+        },
+    ]
+
+    for section in chief_analysis.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        sections.append(
+            {
+                "title": section.get("title"),
+                "paragraphs": section.get("paragraphs"),
+                "bullets": section.get("bullets"),
+            }
+        )
+
+    stage_rows = []
+    for stage in terminal_orchestration.get("stage_status", []):
+        if not isinstance(stage, dict):
+            continue
+        stage_rows.append(
+            {
+                "name": stage.get("name", ""),
+                "status": stage.get("status", ""),
+                "enabled": stage.get("enabled", False),
+                "description": stage.get("description", ""),
+            }
+        )
+
+    focus_rows = []
+    for item in market_synthesis.get("top_stock_focus", []):
+        if not isinstance(item, dict):
+            continue
+        focus_rows.append(
+            {
+                "symbol": item.get("symbol", ""),
+                "setup_type": item.get("setup_type", ""),
+                "trigger": item.get("trigger", ""),
+                "risk_reward": item.get("risk_reward", ""),
+                "invalidation": item.get("invalidation", ""),
+                "degraded_mode": item.get("degraded_mode", False),
+            }
+        )
+
+    skill_stage_rows = []
+    for name, stage in skill_pipeline.get("stages", {}).items():
+        if not isinstance(stage, dict):
+            continue
+        skill_stage_rows.append(
+            {
+                "skill_stage": name,
+                "status": stage.get("status", ""),
+                "summary": stage.get("summary", ""),
+            }
+        )
+
+    news_symbol_rows = []
+    for symbol, summary in news_context.get("symbol_summaries", {}).items():
+        if not isinstance(summary, dict):
+            continue
+        news_symbol_rows.append(
+            {
+                "symbol": symbol,
+                "news_count": summary.get("news_count", 0),
+                "news_signal": summary.get("news_signal", 0.0),
+                "sentiment_summary": summary.get("sentiment_summary", ""),
+            }
+        )
+
+    sections.extend(
+        [
+            {
+                "title": "Runtime Normalization",
+                "items": list(normalized_runtime.items()),
+            },
+            {
+                "title": "Skill Pipeline Summary",
+                "items": [
+                    ("pipeline_status", skill_pipeline.get("status")),
+                    ("completed_stage_count", skill_pipeline.get("completed_stage_count")),
+                    ("total_stage_count", skill_pipeline.get("total_stage_count")),
+                ],
+            },
+            {
+                "title": "Skill Stage Outputs",
+                "table": pd.DataFrame(skill_stage_rows),
+            },
+            {
+                "title": "News Context",
+                "items": [
+                    ("status", news_context.get("status")),
+                    ("selected_symbol_count", news_context.get("selected_symbol_count")),
+                    ("symbols_with_news_context", news_context.get("symbols_with_news_context")),
+                    ("news_items_total", news_context.get("news_items_total")),
+                    ("market_sentiment_summary", _ensure_dict(news_context.get("market_summary")).get("market_sentiment_summary")),
+                ],
+            },
+            {
+                "title": "News Context By Symbol",
+                "table": pd.DataFrame(news_symbol_rows),
+            },
+            {
+                "title": "Top Focus Table",
+                "table": pd.DataFrame(focus_rows),
+            },
+            {
+                "title": "AI Overlay",
+                "items": [
+                    ("ai_headline", ai_analysis.get("headline")),
+                    ("market_story", ai_analysis.get("market_story")),
+                    ("portfolio_focus", ai_analysis.get("portfolio_focus")),
+                    ("model", ai_analysis.get("model")),
+                ],
+            },
+            {
+                "title": "Terminal Stages",
+                "table": pd.DataFrame(stage_rows),
+            },
+            {
+                "title": "Warnings",
+                "bullets": _normalize_string_list(payload.get("warnings")) or ["Khong co warning dang ke."],
+            },
+        ]
+    )
+
+    return {
+        "title": chief_analysis.get("title") or "Market Analysis Report",
+        "sections": sections,
     }
 
 
@@ -607,6 +909,8 @@ def _build_manifest_payload(
     ranking_top10_html: str | None,
     daily_briefing_markdown: str | None,
     daily_briefing_html: str | None,
+    market_analysis_report_markdown: str | None,
+    market_analysis_report_html: str | None,
     deep_dive_markdown_paths: list[str],
     deep_dive_html_paths: list[str],
     trade_plan_markdown_paths: list[str],
@@ -629,6 +933,8 @@ def _build_manifest_payload(
         "ranking_top10_html": ranking_top10_html,
         "daily_briefing_markdown": daily_briefing_markdown,
         "daily_briefing_html": daily_briefing_html,
+        "market_analysis_report_markdown": market_analysis_report_markdown,
+        "market_analysis_report_html": market_analysis_report_html,
         "deep_dive_markdown_paths": deep_dive_markdown_paths,
         "deep_dive_html_paths": deep_dive_html_paths,
         "trade_plan_markdown_paths": trade_plan_markdown_paths,
@@ -661,6 +967,13 @@ def _render_markdown_from_content(content: dict[str, Any]) -> str:
             for item in items:
                 if isinstance(item, tuple) and len(item) == 2:
                     lines.append(f"- `{item[0]}`: {_scalar_text(item[1])}")
+
+        paragraphs = section.get("paragraphs")
+        if isinstance(paragraphs, list):
+            for paragraph in paragraphs:
+                text = str(paragraph).strip()
+                if text:
+                    lines.append(text)
 
         bullets = section.get("bullets")
         if isinstance(bullets, list):
@@ -695,6 +1008,13 @@ def _render_html_from_content(content: dict[str, Any]) -> str:
                         f"<li><strong>{escape(str(key))}</strong>: {escape(_scalar_text(value))}</li>"
                     )
                 html_parts.append("</ul>")
+
+        paragraphs = section.get("paragraphs")
+        if isinstance(paragraphs, list):
+            for paragraph in paragraphs:
+                text = str(paragraph).strip()
+                if text:
+                    html_parts.append(f"<p>{escape(text)}</p>")
 
         bullets = section.get("bullets")
         if isinstance(bullets, list) and bullets:

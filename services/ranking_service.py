@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from services.scoring_service import ScoreWeights, score_universe
+
+
+_VALID_STOCK_SYMBOL_PATTERN = re.compile(r"^[A-Z]{3,4}$")
 
 
 def _safe_read_csv(path: str | Path) -> pd.DataFrame:
@@ -19,6 +23,11 @@ def _safe_read_csv(path: str | Path) -> pd.DataFrame:
 
 def _enrich_defaults(df: pd.DataFrame) -> pd.DataFrame:
     working_df = df.copy()
+    if "symbol" in working_df.columns:
+        working_df["symbol"] = working_df["symbol"].astype(str).str.strip().str.upper()
+        working_df = working_df[
+            working_df["symbol"].apply(lambda value: bool(_VALID_STOCK_SYMBOL_PATTERN.fullmatch(value)))
+        ].reset_index(drop=True)
 
     if "sector" not in working_df.columns:
         working_df["sector"] = "UNKNOWN"

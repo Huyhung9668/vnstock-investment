@@ -1,6 +1,6 @@
 # Trade Plan: FPT
 - Nguon du lieu: `free_provider`
-- Thoi gian tao: `2026-03-23T06:08:51.055027`
+- Thoi gian tao: `2026-03-23T16:33:32.071044+07:00`
 
 ## Tom tat du lieu dau vao
 - Ma co phieu: `FPT`
@@ -17,9 +17,9 @@
 - `history`:  - Ngày 13/09/1988: Tiền thân của Công ty FPT là Công ty Công nghệ Thực phẩm được thành lập;  - Tháng 03/2002: Công ty được cổ phần hóa, đổi tên thành Công ty Cổ phần Phát triển Đầu tư Công nghệ FPT với vốn điều lệ ban đầu là 20 tỷ đồng;  - Ngày 13/12/2006: Cổ phiếu của công ty được chính thức niêm yết trên HOSE;  - Năm 2014: Tiến hành thương vụ M&A đầu tiên trong lĩnh vực công nghệ thông tin của Việt Nam tại thị trường nước ngoài;  - Ngày 14/04/2017: Tăng vốn điều lệ lên 4.617.230.540.000 đồng;  - Ngày 22/06/2017: Tăng vốn điều lệ lên 5.309.611.050.000 đồng;  - Ngày 23/04/2018: Tăng vốn điều lệ lên 5.336.156.610.000 đồng;  - Ngày 19/06/2018: Tăng vốn điều lệ lên 6.136.367.720.000 đồng;  - Ngày 16/04/2019: Tăng vốn điều lệ lên 6.167.039.720.000 đồng;  - Ngày 11/06/2019: Tăng vốn điều lệ lên 6.783.586.880.000 đồng;  - Ngày 13/04/2020: Tăng vốn điều lệ lên 6.817.504.780.000 đồng;  - Ngày 04/06/2020: Tăng vốn điều lệ lên 7.839.874.860.000 đồng;  - Ngày 06/05/2021: Tăng vốn điều lệ lên 7.891.972.540.000 đồng;  - Ngày 06/07/2021: Tăng vốn điều lệ lên 9.075.516.490.000 đồng;  - Ngày 11/05/2022: Tăng vốn điều lệ lên 9.141.959.140.000 đồng;  - Ngày 11/07/2022: Tăng vốn điều lệ lên 10.970.265.720.000 đồng;  - Ngày 17/05/2023: Tăng vốn điều lệ lên 11.043.316.220.000 đồng;  - Ngày 07/08/2023: Tăng vốn điều lệ lên 12.699.688.750.000 đồng;  - Ngày 03/07/2024: Tăng vốn điều lệ lên 14.604.480.660.000 đồng;  - Ngày 25/10/2024: Tăng vốn điều lệ lên 14.710.691.830.000 đồng;  - Ngày 28/05/2025: Tăng vốn điều lệ lên 14.813.301.220.000 đồng;  - Ngày 21/08/2025: Tăng vốn điều lệ lên 17.035.071.210.000 đồng;
 
 ### Price Snapshot
-- `avg_volume`: 10598539.1069
-- `day_change`: 0.4
-- `day_change_pct`: 0.5362
+- `avg_volume`: 10629878.0382
+- `day_change`: -1.5
+- `day_change_pct`: -2.0107
 - `end_date`: 2026-03-23
 - `first_close`: 100.95
 
@@ -29,6 +29,34 @@
 ### Risks Input
 - Khong co risk cau truc duoc cung cap.
 
+## Price overview
+- `avg_volume`: 10629878.0382
+- `day_change`: -1.5
+- `day_change_pct`: -2.0107
+- `end_date`: 2026-03-23
+- `first_close`: 100.95
+- `high_max`: 108.7
+- `last_close`: 73.1
+- `latest_volume`: 13156200
+
+## Technical / trend
+- Khong co signal cau truc duoc cung cap.
+
+## Financial snapshot
+- `sections`: dict(balance_sheet, cash_flow, income_statement)
+- `source`: VCI
+- `status`: available
+- `symbol`: FPT
+- `timestamp`: 2026-03-23T16:33:30.773963+07:00
+
+## News / catalysts
+- `article_count`: 10
+- `latest`: dict(ceiling, close_price, floor, friendly_sub_title)
+- `source`: VCI
+- `status`: available
+- `symbol`: FPT
+- `timestamp`: 2026-03-23T16:33:32.071044+07:00
+
 ## Danh gia chat luong du lieu
 - Muc do tin cay tong hop: **Trung binh**
 - So section thieu: `1`
@@ -36,14 +64,15 @@
 - Provider health: `ok`
 - `lookback_days`: 180
 - `provider`: free_provider
+- `scope`: provider
 - `source`: VCI
 
 ### Section Quality
 - `breadth_context`: status=`missing`, present=`False`
-- `company`: status=`ok`, present=`True`, record_count=`10`
+- `company`: status=`ok`, present=`True`, record_count=`12`
 - `financial_summary`: status=`ok`, present=`True`
 - `news_summary`: status=`ok`, present=`True`
-- `price_summary`: status=`ok`, present=`True`, record_count=`15`
+- `price_summary`: status=`ok`, present=`True`, record_count=`17`
 
 ## Scenario 1: Tich cuc
 - Muc do tin cay kich ban: **Trung binh**
@@ -128,6 +157,6 @@
 
 ## Data coverage / Data quality
 - provider: `free_provider`
-- generated_at: `2026-03-23T06:08:51.055027`
+- generated_at: `2026-03-23T16:33:32.071044+07:00`
 - missing_sections: `breadth_context`
 - overall_status: `medium`

@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -21,8 +22,15 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from notifiers.telegram import TelegramNotifier, build_daily_summary_message
 from providers.factory import create_provider
+from services.ai_analysis_service import (
+    ai_analysis_ready,
+    build_ai_daily_briefing,
+    load_ai_analysis_config,
+)
 from services.analysis_builder import build_analysis_package
+from services.chief_analysis_writer_service import build_chief_analysis
 from services.daily_briefing_service import build_daily_briefing
+from services.terminal_orchestrator_service import build_terminal_orchestration
 from services.manifest_service import create_manifest, save_manifest
 from services.report_export_service import export_report_bundle
 from services.report_exporter import export_markdown_report
@@ -36,6 +44,7 @@ MARKET_OVERVIEW_PATH = PROJECT_ROOT / "data" / "derived" / "market_overview.json
 RANKING_TABLE_PATH = PROJECT_ROOT / "data" / "derived" / "universe_scores.csv"
 RAW_SCAN_OUTPUT_PATH = PROJECT_ROOT / "data" / "derived" / "universe_scan_raw.csv"
 DOTENV_PATH = PROJECT_ROOT / ".env"
+VALID_STOCK_SYMBOL_PATTERN = re.compile(r"^[A-Z]{3,4}$")
 
 
 @dataclass(slots=True)
@@ -71,6 +80,7 @@ class RunContext:
     trade_plan_payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
     deep_dive_payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
     daily_briefing_payload: dict[str, Any] = field(default_factory=dict)
+    ai_analysis_payload: dict[str, Any] = field(default_factory=dict)
     bundle_output_dir: str | None = None
     bundle_manifest_path: str | None = None
     total_scanned: int = 0
@@ -264,6 +274,10 @@ def _normalize_symbol(value: Any) -> str:
     return str(value).strip().upper()
 
 
+def _is_valid_stock_symbol(symbol: str) -> bool:
+    return bool(VALID_STOCK_SYMBOL_PATTERN.fullmatch(symbol.strip().upper()))
+
+
 def _load_dataframe(path: Path) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame()
@@ -283,7 +297,14 @@ def _normalize_ranking_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     working_df["symbol"] = working_df["symbol"].astype(str).str.strip().str.upper()
+    working_df = working_df[working_df["symbol"].apply(_is_valid_stock_symbol)].reset_index(drop=True)
     working_df = working_df[working_df["symbol"] != ""].drop_duplicates(subset=["symbol"]).reset_index(drop=True)
+
+    if "score" not in working_df.columns:
+        if "final_score" in working_df.columns:
+            working_df["score"] = working_df["final_score"]
+        elif "raw_score" in working_df.columns:
+            working_df["score"] = working_df["raw_score"]
 
     if "score" in working_df.columns:
         working_df["score"] = pd.to_numeric(working_df["score"], errors="coerce")
@@ -301,7 +322,11 @@ def _load_watchlist_symbols(watchlist_config: DictStrAny) -> list[str]:
     raw_symbols = watchlist_config.get("symbols")
     if not isinstance(raw_symbols, list):
         return []
-    return [_normalize_symbol(item) for item in raw_symbols if _normalize_symbol(item)]
+    return [
+        _normalize_symbol(item)
+        for item in raw_symbols
+        if _normalize_symbol(item) and _is_valid_stock_symbol(_normalize_symbol(item))
+    ]
 
 
 def _resolve_top_symbols_path(runtime_config: DictStrAny) -> Path:
@@ -316,7 +341,11 @@ def _load_json_symbol_list(path: Path) -> list[str]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, list):
         raise ValueError(f"Expected list[str] at {path}")
-    return [_normalize_symbol(item) for item in payload if _normalize_symbol(item)]
+    return [
+        _normalize_symbol(item)
+        for item in payload
+        if _normalize_symbol(item) and _is_valid_stock_symbol(_normalize_symbol(item))
+    ]
 
 
 def _selection_mode(runtime_config: DictStrAny) -> str:
@@ -929,6 +958,52 @@ def compose_daily_briefing(runtime_bundle: RuntimeConfigBundle, context: RunCont
         )
 
 
+def compose_ai_briefing(runtime_bundle: RuntimeConfigBundle, context: RunContext) -> None:
+    _log_step_start("compose_ai_briefing")
+    try:
+        _ = runtime_bundle
+        ai_config = load_ai_analysis_config()
+        if not ai_analysis_ready(ai_config):
+            logging.info("AI analysis disabled or not configured. Skipping compose_ai_briefing.")
+            return
+
+        context.ai_analysis_payload = build_ai_daily_briefing(
+            config=ai_config,
+            base_briefing=context.daily_briefing_payload,
+            market_overview=context.market_overview or {},
+            symbol_payloads=context.deep_dive_payloads,
+            trade_plan_payloads=context.trade_plan_payloads,
+            warnings=list(context.job_warnings),
+        )
+        if context.ai_analysis_payload.get("headline"):
+            context.daily_briefing_payload["headline"] = context.ai_analysis_payload["headline"]
+        context.daily_briefing_payload["ai_analysis"] = dict(context.ai_analysis_payload)
+        context.daily_briefing_payload["terminal_orchestration"] = build_terminal_orchestration(
+            market_overview=context.market_overview or {},
+            ranking_available=not context.ranking_table.empty,
+            top_opportunities=context.daily_briefing_payload.get("top_opportunities", []),
+            symbol_payloads=context.deep_dive_payloads,
+            trade_plan_payloads=context.trade_plan_payloads,
+            execution_status=context.daily_briefing_payload.get("execution_status", {}),
+            skill_pipeline=context.daily_briefing_payload.get("skill_pipeline", {}),
+            ai_analysis=context.ai_analysis_payload,
+        )
+        context.daily_briefing_payload["chief_analysis"] = build_chief_analysis(
+            synthesis=context.daily_briefing_payload.get("market_synthesis", {}),
+            generated_at=context.run_id,
+            ai_analysis=context.ai_analysis_payload,
+        )
+        logging.info("ai_briefing_model=%s", context.ai_analysis_payload.get("model"))
+    except Exception as exc:
+        _log_error("compose_ai_briefing", exc)
+        _warn_step(context, "compose_ai_briefing", f"failed: {type(exc).__name__}: {exc}")
+    finally:
+        _log_step_end_with_counts(
+            "compose_ai_briefing",
+            ai_actions=len(context.ai_analysis_payload.get("action_plan", [])),
+        )
+
+
 def export_reports(runtime_bundle: RuntimeConfigBundle, context: RunContext) -> None:
     _log_step_start("export_reports")
     try:
@@ -983,6 +1058,8 @@ def export_reports(runtime_bundle: RuntimeConfigBundle, context: RunContext) -> 
             logging.info("ranking_report=%s", export_result.ranking_table_path)
         if export_result.daily_briefing_path:
             logging.info("daily_briefing_report=%s", export_result.daily_briefing_path)
+        if export_result.market_analysis_report_path:
+            logging.info("market_analysis_report=%s", export_result.market_analysis_report_path)
         if export_result.run_summary_path:
             logging.info("run_summary_report=%s", export_result.run_summary_path)
 
@@ -1054,6 +1131,12 @@ def build_final_summary(runtime_bundle: RuntimeConfigBundle, context: RunContext
         "trade_plans_built": context.trade_plans_built,
         "next_actions": list(context.daily_briefing_payload.get("next_actions", [])),
         "execution_quality": context.daily_briefing_payload.get("execution_status", {}).get("quality", "unknown"),
+        "ai_headline": context.ai_analysis_payload.get("headline"),
+        "ai_action_plan": list(context.ai_analysis_payload.get("action_plan", [])),
+        "ai_market_story": context.ai_analysis_payload.get("market_story"),
+        "ai_enabled": bool(context.ai_analysis_payload),
+        "terminal_mode": context.daily_briefing_payload.get("terminal_orchestration", {}).get("mode"),
+        "terminal_summary": context.daily_briefing_payload.get("terminal_orchestration", {}).get("summary"),
     }
 
     if context.bundle_output_dir:
@@ -1161,6 +1244,12 @@ def main() -> DictStrAny:
     except BaseException as exc:
         _re_raise_if_keyboard_interrupt(exc)
         _warn(context, f"unexpected compose_daily_briefing error: {type(exc).__name__}: {exc}")
+
+    try:
+        compose_ai_briefing(runtime_bundle, context)
+    except BaseException as exc:
+        _re_raise_if_keyboard_interrupt(exc)
+        _warn(context, f"unexpected compose_ai_briefing error: {type(exc).__name__}: {exc}")
 
     try:
         export_reports(runtime_bundle, context)

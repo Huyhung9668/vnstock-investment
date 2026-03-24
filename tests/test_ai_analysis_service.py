@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from services.ai_analysis_service import (
+    build_ai_daily_briefing,
+    load_ai_analysis_config,
+)
+
+
+def test_file_mode_reads_local_response_and_dumps_prompt(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    prompt_file = tmp_path / "ai_prompt.json"
+    response_file = tmp_path / "ai_response.json"
+    response_file.write_text(
+        json.dumps(
+            {
+                "headline": "Thi truong di ngang",
+                "market_story": "Dong tien chua mo rong.",
+                "portfolio_focus": "Tap trung quan tri rui ro.",
+                "top_symbol_notes": [{"symbol": "FPT", "note": "Giu nen gia tot."}],
+                "action_plan": ["Theo doi phan ung gia quanh ho tro."],
+                "risk_alerts": ["Thanh khoan chua xac nhan."],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("AI_ANALYSIS_ENABLED", "true")
+    monkeypatch.setenv("AI_ANALYSIS_MODE", "file")
+    monkeypatch.setenv("OPENAI_MODEL", "codex-local-bridge")
+    monkeypatch.setenv("AI_ANALYSIS_PROMPT_FILE", str(prompt_file))
+    monkeypatch.setenv("AI_ANALYSIS_RESPONSE_FILE", str(response_file))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    config = load_ai_analysis_config()
+    payload = build_ai_daily_briefing(
+        config=config,
+        base_briefing={"headline": "Base"},
+        market_overview={"trend": "sideways"},
+        symbol_payloads={"FPT": {"score": 85}},
+        trade_plan_payloads={"FPT": {"bias": "neutral"}},
+        warnings=["degraded data"],
+    )
+
+    assert payload["headline"] == "Thi truong di ngang"
+    assert payload["model"] == "codex-local-bridge"
+    assert payload["top_symbol_notes"] == [{"symbol": "FPT", "note": "Giu nen gia tot."}]
+
+    prompt_payload = json.loads(prompt_file.read_text(encoding="utf-8"))
+    assert prompt_payload["provider"] == "local_file_bridge"
+    assert prompt_payload["model"] == "codex-local-bridge"
+    assert "base_briefing" in prompt_payload["user_prompt"]

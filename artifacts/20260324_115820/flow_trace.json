@@ -1,0 +1,54 @@
+{
+  "run_id": "20260324_115820",
+  "generated_at": "2026-03-24T11:59:56.404296",
+  "steps": [
+    {
+      "step_no": 1,
+      "name": "load_runtime_config_and_mode",
+      "status": "completed",
+      "detail": "mode=free, selection_mode=top_from_universe"
+    },
+    {
+      "step_no": 2,
+      "name": "initialize_run_context_and_manifest_skeleton",
+      "status": "completed",
+      "detail": "run_id=20260324_115820"
+    },
+    {
+      "step_no": 3,
+      "name": "check_source_health_and_fallback",
+      "status": "completed",
+      "detail": "{\"status\": \"ready\", \"primary_provider\": \"free\", \"fallback_provider\": \"free\", \"checks\": {\"config_runtime\": true, \"config_sources\": true, \"derived_dir_exists\": true, \"top10_exists\": true, \"ranking_exists\": true, \"market_overview_exists\": true, \"openai_api_key_present\": false}, \"warnings\": []}"
+    },
+    {
+      "step_no": 7,
+      "name": "build_symbol_profiles",
+      "status": "completed",
+      "detail": "symbol_profile_candidates=8 source=C:\\Users\\User\\.codex\\vnstock-investment\\data\\derived\\top10_symbols.json"
+    },
+    {
+      "step_no": 8,
+      "name": "rank_and_select_top_candidates",
+      "status": "completed",
+      "detail": "ranked=51, selected=8"
+    },
+    {
+      "step_no": 9,
+      "name": "aggregate_market_and_symbol_news",
+      "status": "completed",
+      "detail": "news context currently inferred from available market/skill payloads."
+    },
+    {
+      "step_no": 10,
+      "name": "deep_dive_top_10",
+      "status": "completed",
+      "detail": "deep_dives_built=8"
+    },
+    {
+      "step_no": 11,
+      "name": "openai_market_and_symbol_synthesis",
+      "status": "completed",
+      "detail": "headline=Pipeline o che do degraded; dung CRC nhu mot y tuong can review, khong nen auto-trade."
+    }
+  ]
+}

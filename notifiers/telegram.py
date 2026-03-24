@@ -65,7 +65,7 @@ def build_daily_summary_message(summary: dict[str, Any]) -> str:
         f"- Quality: {summary.get('execution_quality', 'unknown')}",
         "",
         "*Headline*",
-        str(summary.get("headline", "Chua co headline")),
+        str(summary.get("ai_headline") or summary.get("headline", "Chua co headline")),
         "",
         "*Top 10*",
         ", ".join(summary.get("symbols_selected", [])[:10]) or "N/A",
@@ -84,6 +84,18 @@ def build_daily_summary_message(summary: dict[str, Any]) -> str:
         lines.append("")
         lines.append("*Next Actions*")
         lines.extend([f"- {item}" for item in next_actions[:3]])
+
+    ai_actions = summary.get("ai_action_plan", [])
+    if isinstance(ai_actions, list) and ai_actions:
+        lines.append("")
+        lines.append("*AI Actions*")
+        lines.extend([f"- {item}" for item in ai_actions[:3]])
+
+    ai_market_story = str(summary.get("ai_market_story", "")).strip()
+    if ai_market_story:
+        lines.append("")
+        lines.append("*AI Market Story*")
+        lines.append(ai_market_story)
 
     lines.append("")
     lines.append("*Artifacts*")

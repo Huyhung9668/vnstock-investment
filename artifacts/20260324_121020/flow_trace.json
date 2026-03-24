@@ -1,0 +1,42 @@
+{
+  "run_id": "20260324_121020",
+  "generated_at": "2026-03-24T12:11:56.130854",
+  "steps": [
+    {
+      "step_no": 1,
+      "name": "load_runtime_config_and_mode",
+      "status": "completed",
+      "detail": "mode=free, selection_mode=top_from_universe"
+    },
+    {
+      "step_no": 2,
+      "name": "initialize_run_context_and_manifest_skeleton",
+      "status": "completed",
+      "detail": "run_id=20260324_121020"
+    },
+    {
+      "step_no": 3,
+      "name": "check_source_health_and_fallback",
+      "status": "completed",
+      "detail": "{\"status\": \"ready\", \"primary_provider\": \"free\", \"fallback_provider\": \"free\", \"checks\": {\"config_runtime\": true, \"config_sources\": true, \"derived_dir_exists\": true, \"top10_exists\": true, \"ranking_exists\": true, \"market_overview_exists\": true, \"openai_api_key_present\": false}, \"warnings\": []}"
+    },
+    {
+      "step_no": 12,
+      "name": "generate_trade_plans",
+      "status": "completed",
+      "detail": "trade_plans_built=8"
+    },
+    {
+      "step_no": 13,
+      "name": "apply_risk_and_portfolio_constraints",
+      "status": "completed",
+      "detail": "risk=Risk engine danh gia portfolio risk = elevated.; portfolio=Portfolio auditor de xuat posture = defensive. Co 8 setup can giam size hoac quan sat them."
+    },
+    {
+      "step_no": 14,
+      "name": "run_quality_gates",
+      "status": "completed",
+      "detail": "{\"status\": \"degraded\", \"checks\": {\"market_overview_ready\": true, \"top_opportunities_ready\": true, \"trade_plans_ready\": true, \"daily_briefing_ready\": true, \"chief_analysis_ready\": true, \"skill_pipeline_ready\": true}, \"failed_checks\": [], \"warning_count\": 24, \"summary\": \"Quality gates dat muc chap nhan duoc nhung con warnings can review.\"}"
+    }
+  ]
+}

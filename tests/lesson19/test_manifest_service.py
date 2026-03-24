@@ -3,9 +3,13 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from models.report_manifest import ReportManifest
 from services.manifest_service import create_manifest, save_manifest
+
+
+VIETNAM_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 def make_manifest() -> ReportManifest:
@@ -43,9 +47,9 @@ def test_create_manifest_generates_run_id() -> None:
 
 
 def test_create_manifest_sets_valid_run_date() -> None:
-    before = datetime.utcnow()
+    before = datetime.now(VIETNAM_TZ)
     manifest = make_manifest()
-    after = datetime.utcnow()
+    after = datetime.now(VIETNAM_TZ)
 
     assert isinstance(manifest.run_date, datetime)
     assert before <= manifest.run_date <= after
@@ -86,3 +90,25 @@ def test_create_manifest_normalizes_symbols_when_manifest_model_applies_normaliz
     manifest = make_manifest()
 
     assert manifest.symbols == ["FPT", "VCB"]
+
+
+def test_save_manifest_raises_for_empty_output_path() -> None:
+    manifest = make_manifest()
+
+    try:
+        save_manifest(manifest, "")
+    except ValueError as exc:
+        assert str(exc) == "output_path must be a non-empty string"
+    else:
+        raise AssertionError("Expected ValueError for empty output path")
+
+
+def test_save_manifest_raises_for_directory_output_path(tmp_path: Path) -> None:
+    manifest = make_manifest()
+
+    try:
+        save_manifest(manifest, str(tmp_path))
+    except IsADirectoryError as exc:
+        assert "output_path must be a file path" in str(exc)
+    else:
+        raise AssertionError("Expected IsADirectoryError for directory output path")

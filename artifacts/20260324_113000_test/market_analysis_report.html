@@ -1,0 +1,77 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Nhan Dinh Thi Truong &amp; Ke Hoach Hanh Dong</title><style>body{font-family:Arial,Helvetica,sans-serif;max-width:1100px;margin:32px auto;padding:0 16px;line-height:1.6;color:#1f2937;}table{border-collapse:collapse;width:100%;margin:16px 0;}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;vertical-align:top;}th{background:#f3f4f6;}code{background:#f3f4f6;padding:2px 4px;border-radius:4px;}h1,h2,h3{color:#111827;}ul{padding-left:20px;}</style></head><body><h1>Nhan Dinh Thi Truong &amp; Ke Hoach Hanh Dong</h1><h2>Meta</h2><ul><li><strong>run_id</strong>: 20260324_113000</li><li><strong>headline</strong>: Pipeline o che do degraded; dung FPT nhu mot y tuong can review, khong nen auto-trade.</li><li><strong>selection_mode</strong>: top_from_universe</li><li><strong>update_line</strong>: Cap nhat: 20260324_113000</li><li><strong>terminal_mode</strong>: analysis_ready</li><li><strong>terminal_summary</strong>: Trading terminal co du bo canh de viet bai tong hop, nhung van con mot so lop du lieu thieu (5/6 stages).</li></ul><h2>Executive Summary</h2><p>Thi truong dang o che do risk_on, nhung pipeline con degraded; dung FPT nhu y tuong can review thay vi auto-trade.</p><h2>Tom Tat Dieu Hanh</h2><p>Thi truong dang o che do risk_on, nhung pipeline con degraded; dung FPT nhu y tuong can review thay vi auto-trade.</p><p>Trang thai hanh dong uu tien hien tai: selective offense.</p><p>Du lieu co the dung de dinh huong, nhung can tach ro phan chac chan va phan can xac minh them.</p><h2>Tin Hieu Vi Mo Va Sentiment</h2><ul><li>Trang thai vi mo va sentiment hien tai nghieng ve che do risk_on: Do rong va dong tien dang mo rong.</li><li>Do manh trung han cua universe dang phan anh qua avg_return_3m = 0.11.</li><li>Bien dong thi truong hien tai duoc ghi nhan o muc moderate.</li></ul><h2>Trang Thai Thi Truong</h2><ul><li>Thi truong dang van dong trong che do risk_on; chat luong pipeline hien tai = degraded.</li><li>Do rong tang gia uoc tinh positive_ratio = 0.63.</li><li>Ty le advance/decline hien tai = 1.7.</li><li>Bo canh chi so dang duoc noi suy tu equal_weight_proxy.</li></ul><h2>Dong Tien Va Luan Chuyen Nganh</h2><ul><li>Dong tien tap trung vao nhom dan dat voi top_n_liquidity_share = 0.46.</li><li>Cac ma hut thanh khoan noi bat: FPT, VCB.</li><li>Nhom BANKING dang o trang thai leading voi avg_return_3m = 0.1.</li></ul><h2>Co Hoi Dang Chu Y</h2><ul><li>FPT: Canh mua khi test ho tro. Trigger = 120 - 123 (buy_on_pullback). Risk/reward = 1.7.</li><li>VCB: Can review them truoc khi hanh dong. Trigger = wait. Risk/reward = n/a.</li></ul><h2>Ke Hoach Hanh Dong</h2><p>Portfolio focus hien tai nghieng ve selective offense, voi muc do tin cay du lieu o muc medium.</p><ul><li>Can review ky cac phan degraded/fallback truoc khi bien bao cao thanh hanh dong giao dich.</li><li>Lap watchlist hanh dong ngan han cho: FPT, VCB.</li></ul><h2>Rui Ro Va Dieu Kien Vo Hieu</h2><ul><li>Dieu kien vo hieu can theo doi sat: Mat 118.</li><li>breadth context fallback</li></ul><h2>Ket Luan</h2><p>Thi truong dang o che do risk_on, nhung pipeline con degraded; dung FPT nhu y tuong can review thay vi auto-trade.</p><h2>Top Focus Table</h2><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>symbol</th>
+      <th>setup_type</th>
+      <th>trigger</th>
+      <th>risk_reward</th>
+      <th>invalidation</th>
+      <th>degraded_mode</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>FPT</td>
+      <td>pullback_buy</td>
+      <td>120 - 123 (buy_on_pullback)</td>
+      <td>1.7</td>
+      <td>Mat 118.</td>
+      <td>False</td>
+    </tr>
+    <tr>
+      <td>VCB</td>
+      <td>unknown</td>
+      <td>wait</td>
+      <td>n/a</td>
+      <td>Chua co invalidation ro rang.</td>
+      <td>False</td>
+    </tr>
+  </tbody>
+</table><h2>AI Overlay</h2><ul><li><strong>ai_headline</strong>: Chưa có dữ liệu</li><li><strong>market_story</strong>: Chưa có dữ liệu</li><li><strong>portfolio_focus</strong>: Chưa có dữ liệu</li><li><strong>model</strong>: Chưa có dữ liệu</li></ul><h2>Terminal Stages</h2><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>name</th>
+      <th>status</th>
+      <th>enabled</th>
+      <th>description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>market_context</td>
+      <td>ready</td>
+      <td>True</td>
+      <td>Market overview va breadth context</td>
+    </tr>
+    <tr>
+      <td>ranking</td>
+      <td>ready</td>
+      <td>True</td>
+      <td>Universe ranking/scanner</td>
+    </tr>
+    <tr>
+      <td>deep_dive</td>
+      <td>ready</td>
+      <td>True</td>
+      <td>Phan tich chi tiet theo symbol</td>
+    </tr>
+    <tr>
+      <td>trade_plan</td>
+      <td>ready</td>
+      <td>True</td>
+      <td>Trade plan va action levels</td>
+    </tr>
+    <tr>
+      <td>opportunity_selection</td>
+      <td>ready</td>
+      <td>True</td>
+      <td>Chon top opportunities</td>
+    </tr>
+    <tr>
+      <td>ai_overlay</td>
+      <td>missing</td>
+      <td>False</td>
+      <td>AI overlay cho narrative</td>
+    </tr>
+  </tbody>
+</table><h2>Warnings</h2><ul><li>breadth context fallback</li></ul></body></html>

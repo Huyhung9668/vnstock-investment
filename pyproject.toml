@@ -1,0 +1,23 @@
+[project]
+name = "vnstock-investment"
+version = "0.1.0"
+description = "Daily investment copilot for Vietnam stock market"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "PyYAML==6.0.3",
+    "pandas==3.0.1",
+    "matplotlib==3.10.8",
+    "vnstock==3.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.0.2",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+pythonpath = ["."]

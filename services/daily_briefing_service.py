@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from services.chief_analysis_writer_service import build_chief_analysis
+from services.market_synthesis_service import build_market_synthesis
+from services.skill_pipeline_service import build_skill_pipeline_payload
+from services.terminal_orchestrator_service import build_terminal_orchestration
+
 
 DictStrAny = dict[str, Any]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def build_daily_briefing(
@@ -41,6 +48,39 @@ def build_daily_briefing(
         top_opportunities=top_opportunities,
         warnings=normalized_warnings,
     )
+    market_synthesis = build_market_synthesis(
+        run_id=run_id,
+        selection_mode=selection_mode,
+        market_overview=normalized_market,
+        ranking_table=normalized_ranking,
+        top_opportunities=top_opportunities,
+        symbol_payloads=normalized_symbols,
+        trade_plan_payloads=normalized_trade_plans,
+        execution_status=execution_status,
+        warnings=normalized_warnings,
+    )
+    skill_pipeline = build_skill_pipeline_payload(
+        project_root=PROJECT_ROOT,
+        market_overview=normalized_market,
+        ranking_table=normalized_ranking,
+        symbol_payloads=normalized_symbols,
+        trade_plan_payloads=normalized_trade_plans,
+        top_opportunities=top_opportunities,
+        warnings=normalized_warnings,
+    )
+    chief_analysis = build_chief_analysis(
+        synthesis=market_synthesis,
+        generated_at=run_id,
+    )
+    terminal_orchestration = build_terminal_orchestration(
+        market_overview=normalized_market,
+        ranking_available=not normalized_ranking.empty,
+        top_opportunities=top_opportunities,
+        symbol_payloads=normalized_symbols,
+        trade_plan_payloads=normalized_trade_plans,
+        execution_status=execution_status,
+        skill_pipeline=skill_pipeline,
+    )
 
     return {
         "run_id": run_id,
@@ -51,6 +91,10 @@ def build_daily_briefing(
         "top_opportunities": top_opportunities,
         "next_actions": next_actions,
         "warnings": normalized_warnings[:10],
+        "skill_pipeline": skill_pipeline,
+        "market_synthesis": market_synthesis,
+        "chief_analysis": chief_analysis,
+        "terminal_orchestration": terminal_orchestration,
     }
 
 

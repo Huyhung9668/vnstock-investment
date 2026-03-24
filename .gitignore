@@ -15,8 +15,22 @@ env/
 # Environment files
 .env
 
+# Temporary / local artifacts
+.tmp/
+.pytest_tmp_daily/
+.pytest_tmp_exporter/
+test_artifacts/
+
+# Generated outputs
+reports/*.md
+reports/*.html
+reports/manifests/
+manifests/
+data/derived/
+*.log
+
 # OS / editor noise
 .DS_Store
 Thumbs.db
 .vscode/
-
+.idea/
