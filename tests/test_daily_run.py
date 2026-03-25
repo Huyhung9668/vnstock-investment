@@ -99,6 +99,59 @@ def make_analysis_package(
     )
 
 
+def test_build_analysis_warnings_does_not_degrade_when_only_breadth_is_missing() -> None:
+    analysis_package = make_analysis_package(
+        symbol="FPT",
+        financial_status="ok",
+        news_status="ok",
+        breadth_status="missing",
+    )
+
+    warnings, degraded_mode = daily_run._build_analysis_warnings(analysis_package)
+
+    assert degraded_mode is False
+    assert "breadth_context missing; continuing with reduced context" in warnings
+
+
+def test_rank_candidates_synthesizes_market_overview_from_ranking(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime_bundle = daily_run.RuntimeConfigBundle(
+        config_dir=PROJECT_ROOT / "config",
+        runtime={
+            "mode": "free",
+            "selection": {"mode": "top_from_universe", "top_n": 5},
+            "output": {"report_dir": "reports", "manifest_dir": "manifests"},
+            "features": {"market_overview": False},
+        },
+        sources={
+            "providers": {"primary": "free", "fallback": "free"},
+            "services": {"market": "free", "news": "free", "financials": "free"},
+        },
+        watchlist={"symbols": []},
+        universe={},
+    )
+    context = daily_run.build_run_context(runtime_bundle)
+
+    ranking_df = daily_run._normalize_ranking_dataframe(
+        daily_run.pd.DataFrame(
+            [
+                {"symbol": "FPT", "score": 0.92, "return_3m": 0.15, "avg_volume": 1_000_000, "sector": "TECH"},
+                {"symbol": "MWG", "score": 0.81, "return_3m": 0.09, "avg_volume": 900_000, "sector": "RETAIL"},
+                {"symbol": "VCB", "score": 0.65, "return_3m": -0.02, "avg_volume": 800_000, "sector": "BANK"},
+            ]
+        )
+    )
+
+    monkeypatch.setattr(daily_run, "_load_dataframe", lambda path: ranking_df.copy())
+
+    daily_run.rank_candidates(runtime_bundle, context)
+
+    assert context.total_ranked == 3
+    assert context.market_overview is not None
+    assert context.market_overview_path == "in_memory:ranking_table_fallback"
+    assert context.market_overview["source"] == "ranking_table_fallback"
+    assert context.market_overview["breadth"]["total_symbols"] == 3
+
+
 def test_load_config_successfully_and_run_main(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -218,14 +271,14 @@ def test_run_symbol_pipeline_still_creates_manifest_when_optional_source_partial
         )
 
         assert result.status == "success"
-        assert result.degraded_mode is True
+        assert result.degraded_mode is False
         assert result.manifest_path is not None
         assert Path(result.manifest_path).exists()
 
         manifest_payload = json.loads(Path(result.manifest_path).read_text(encoding="utf-8"))
         assert manifest_payload["symbols"] == ["FPT"]
         assert manifest_payload["source_used"] == "free_provider"
-        assert manifest_payload["data_quality_summary"]["degraded_mode"] is True
+        assert manifest_payload["data_quality_summary"]["degraded_mode"] is False
         assert any("breadth_context" in warning for warning in manifest_payload["warnings"])
     finally:
         shutil.rmtree(workspace_dir, ignore_errors=True)

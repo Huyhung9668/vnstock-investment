@@ -30,6 +30,7 @@ from services.ai_analysis_service import (
 from services.analysis_builder import build_analysis_package
 from services.chief_analysis_writer_service import build_chief_analysis
 from services.daily_briefing_service import build_daily_briefing
+from services.market_overview_service import build_market_overview
 from services.terminal_orchestrator_service import build_terminal_orchestration
 from services.manifest_service import create_manifest, save_manifest
 from services.report_export_service import export_report_bundle
@@ -450,11 +451,68 @@ def _build_analysis_warnings(analysis_package: Any) -> tuple[list[str], bool]:
     elif news_status == "missing":
         warnings.append("news_summary missing; continuing with reduced context")
 
-    if breadth_status in {"error", "missing"}:
-        warnings.append(f"breadth_context {breadth_status}; degraded mode enabled")
-        degraded_mode = True
+    if breadth_status == "error":
+        warnings.append("breadth_context error; continuing with reduced context")
+    elif breadth_status == "missing":
+        warnings.append("breadth_context missing; continuing with reduced context")
 
     return warnings, degraded_mode
+
+
+def _synthesize_market_overview_from_ranking(context: RunContext) -> None:
+    if context.market_overview or context.ranking_table.empty:
+        return
+
+    try:
+        market_overview = build_market_overview(context.ranking_table.copy())
+    except Exception as exc:
+        _log_error("synthesize_market_overview_from_ranking", exc)
+        _warn_step(context, "synthesize_market_overview_from_ranking", f"failed: {type(exc).__name__}: {exc}")
+        return
+
+    if not isinstance(market_overview, dict) or not market_overview:
+        return
+
+    market_overview["summary"] = (
+        "Market overview duoc tong hop tu ranking table de bo sung breadth context "
+        "khi provider khong tra ve overview rieng."
+    )
+    market_overview["source"] = "ranking_table_fallback"
+    context.market_overview = market_overview
+    context.market_overview_path = "in_memory:ranking_table_fallback"
+    logging.info("market_overview_path=%s", context.market_overview_path)
+
+
+def _build_breadth_context_override(context: RunContext) -> dict[str, Any] | None:
+    market_overview = context.market_overview
+    if not isinstance(market_overview, dict) or not market_overview:
+        return None
+
+    breadth = market_overview.get("breadth")
+    regime = market_overview.get("regime")
+    index_context = market_overview.get("index_context")
+
+    payload: DictStrAny = {}
+    if isinstance(breadth, dict) and breadth:
+        payload["breadth"] = dict(breadth)
+    if isinstance(regime, dict) and regime:
+        payload["regime"] = dict(regime)
+    if isinstance(index_context, dict) and index_context:
+        payload["index_context"] = dict(index_context)
+
+    sector_rotation = market_overview.get("sector_rotation")
+    if isinstance(sector_rotation, list) and sector_rotation:
+        payload["sector_rotation"] = [dict(item) for item in sector_rotation if isinstance(item, dict)]
+
+    liquidity_concentration = market_overview.get("liquidity_concentration")
+    if isinstance(liquidity_concentration, dict) and liquidity_concentration:
+        payload["liquidity_concentration"] = dict(liquidity_concentration)
+
+    if not payload:
+        return None
+
+    payload["source"] = str(market_overview.get("source") or "market_overview")
+    return payload
 
 
 def _build_degraded_trade_plan(symbol: str, reason: str) -> dict[str, Any]:
@@ -544,7 +602,11 @@ def _build_symbol_artifacts(
     runtime_bundle: RuntimeConfigBundle,
 ) -> SymbolRunResult:
     provider = create_provider(name=provider_name, mode=context.mode, config=runtime_bundle.sources)
-    analysis_package = build_analysis_package(provider, symbol)
+    analysis_package = build_analysis_package(
+        provider,
+        symbol,
+        breadth_context_override=_build_breadth_context_override(context),
+    )
     analysis_data = analysis_package.to_dict()
     trade_plan_warnings: list[str] = []
 
@@ -747,6 +809,7 @@ def rank_candidates(runtime_bundle: RuntimeConfigBundle, context: RunContext) ->
             context.ranking_table = ranking_df
             context.ranking_source = str(RANKING_TABLE_PATH)
             context.total_ranked = len(ranking_df)
+            _synthesize_market_overview_from_ranking(context)
             logging.info("ranking rows=%s source=%s", len(ranking_df), context.ranking_source)
             return
 
@@ -768,6 +831,7 @@ def rank_candidates(runtime_bundle: RuntimeConfigBundle, context: RunContext) ->
             context.ranking_source = str(RAW_SCAN_OUTPUT_PATH)
             context.ranking_fallback_used = True
             context.total_ranked = len(fallback_ranking_df)
+            _synthesize_market_overview_from_ranking(context)
             _warn_step(context, "rank_candidates", "fell back to usable raw scan data.")
             return
 

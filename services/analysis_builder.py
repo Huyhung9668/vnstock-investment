@@ -17,7 +17,12 @@ class SectionResult:
     data_quality: DictStrAny
 
 
-def build_analysis_package(provider: TradePlanningProvider, symbol: str) -> AnalysisPackage:
+def build_analysis_package(
+    provider: TradePlanningProvider,
+    symbol: str,
+    *,
+    breadth_context_override: dict[str, Any] | None = None,
+) -> AnalysisPackage:
     normalized_symbol = _normalize_symbol(symbol)
     provider_name = provider.provider_name()
 
@@ -39,10 +44,21 @@ def build_analysis_package(provider: TradePlanningProvider, symbol: str) -> Anal
         symbol=normalized_symbol,
         fetcher=provider.get_news_summary,
     )
-    breadth_context = _get_optional_global_section(
-        section_name="breadth_context",
-        fetcher=provider.get_breadth_context,
-    )
+    if isinstance(breadth_context_override, dict) and breadth_context_override:
+        breadth_context = SectionResult(
+            value=dict(breadth_context_override),
+            missing=False,
+            data_quality=_build_optional_section_quality(
+                section_name="breadth_context",
+                status="ok",
+                error=None,
+            ),
+        )
+    else:
+        breadth_context = _get_optional_global_section(
+            section_name="breadth_context",
+            fetcher=provider.get_breadth_context,
+        )
 
     missing_sections = _build_missing_sections(
         financial_summary=financial_summary,
