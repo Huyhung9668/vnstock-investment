@@ -164,6 +164,7 @@ def preselect_universe(
 ) -> pd.DataFrame:
     working_df = enrich_exchange(universe_df)
     working_df["exchange"] = working_df["exchange"].astype(str).str.upper()
+    working_df["avg_volume_seed"] = 0.0
 
     if volume_cache_path.exists():
         cache_df = pd.read_csv(volume_cache_path)
@@ -173,18 +174,22 @@ def preselect_universe(
             cache_df["symbol"] = cache_df["symbol"].astype(str).str.strip().str.upper()
             cache_df["avg_volume"] = pd.to_numeric(cache_df["avg_volume"], errors="coerce").fillna(0.0)
             cache_df = cache_df[["symbol", "avg_volume"]].drop_duplicates(subset=["symbol"])
-
-            working_df = working_df.merge(cache_df, on="symbol", how="left", suffixes=("", "_cached"))
-            if "avg_volume_cached" in working_df.columns:
-                working_df["avg_volume_seed"] = working_df["avg_volume_cached"].fillna(0.0)
+            minimum_cache_rows = max(hose_top_n + other_top_n, 120)
+            if len(cache_df) >= minimum_cache_rows:
+                working_df = working_df.merge(cache_df, on="symbol", how="left", suffixes=("", "_cached"))
+                if "avg_volume_cached" in working_df.columns:
+                    working_df["avg_volume_seed"] = working_df["avg_volume_cached"].fillna(0.0)
+                LOGGER.info("Using cached avg_volume to preselect universe: %s", volume_cache_path)
             else:
-                working_df["avg_volume_seed"] = 0.0
-
-            LOGGER.info("Using cached avg_volume to preselect universe: %s", volume_cache_path)
+                LOGGER.warning(
+                    "Cached avg_volume file too small for reliable preselection (%s rows < %s). Ignoring cache: %s",
+                    len(cache_df),
+                    minimum_cache_rows,
+                    volume_cache_path,
+                )
         else:
-            working_df["avg_volume_seed"] = 0.0
+            LOGGER.warning("Cached volume file missing required columns. Ignoring cache: %s", volume_cache_path)
     else:
-        working_df["avg_volume_seed"] = 0.0
         LOGGER.warning(
             "No cached volume file found at %s; preselecting by exchange without volume ranking.",
             volume_cache_path,

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
@@ -71,6 +71,7 @@ def build_daily_briefing(
     chief_analysis = build_chief_analysis(
         synthesis=market_synthesis,
         generated_at=run_id,
+        skill_pipeline=skill_pipeline,
     )
     terminal_orchestration = build_terminal_orchestration(
         market_overview=normalized_market,
@@ -107,36 +108,33 @@ def _build_market_view(selection_mode: str, market_overview: DictStrAny, warning
         summary = (
             _string_or_none(regime.get("explanation"))
             or _string_or_none(market_overview.get("summary"))
-            or "Thi truong co du lieu overview, co the dung de dat boi canh truoc khi vao tung ma."
+            or "Thị trường có dữ liệu overview, có thể dùng để đặt bối cảnh trước khi vào từng mã."
         )
     elif selection_mode == "watchlist":
-        summary = "CI run dang uu tien watchlist de giam tai request, vi vay boi canh thi truong dang o che do toi gian."
+        summary = "Run hiện đang ưu tiên watchlist để giảm tải request, vì vậy bối cảnh thị trường ở chế độ tối giản."
     else:
-        summary = "Chua tai duoc boi canh thi truong tong quan, can tham chieu them khi ra quyet dinh."
+        summary = "Chưa tải được bối cảnh thị trường tổng quan, cần tham chiếu thêm khi ra quyết định."
 
     return {
         "summary": summary,
         "regime": _string_or_none(regime.get("regime")) or "unknown",
-        "breadth": _string_or_none(breadth.get("market_breadth")) or "unknown",
+        "breadth": _string_or_none(breadth.get("status")) or "unknown",
         "volatility": _string_or_none(index_context.get("volatility")) or "unknown",
-        "degraded": not bool(market_overview),
-        "warning_count": len(warnings),
     }
 
 
 def _build_execution_status(symbol_results: list[DictStrAny], warnings: list[str]) -> DictStrAny:
     total = len(symbol_results)
     success = sum(1 for item in symbol_results if str(item.get("status")) == "success")
-    degraded = sum(1 for item in symbol_results if bool(item.get("degraded_mode")))
     failed = sum(1 for item in symbol_results if str(item.get("status")) == "failed")
+    degraded = sum(1 for item in symbol_results if bool(item.get("degraded_mode")))
     fallback_used = any(bool(item.get("fallback_used")) for item in symbol_results)
 
+    quality = "healthy"
     if failed > 0:
         quality = "partial"
-    elif degraded > 0 or fallback_used or warnings:
+    elif degraded > 0 or warnings:
         quality = "degraded"
-    else:
-        quality = "healthy"
 
     return {
         "quality": quality,
@@ -169,9 +167,9 @@ def _build_top_opportunities(
                 "symbol": symbol,
                 "status": str(result.get("status", "unknown")),
                 "setup_type": _string_or_none(plan.get("setup_type")) or "unknown",
-                "thesis": _string_or_none(plan.get("thesis")) or _string_or_none(analysis.get("thesis")) or "Can review them truoc khi hanh dong.",
+                "thesis": _string_or_none(plan.get("thesis")) or _string_or_none(analysis.get("thesis")) or "Cần review thêm trước khi hành động.",
                 "trigger": _entry_zone_text(plan.get("entry_zone")),
-                "invalidation": _string_or_none(plan.get("invalidation")) or "Chua co invalidation ro rang.",
+                "invalidation": _string_or_none(plan.get("invalidation")) or "Chưa có invalidation rõ ràng.",
                 "risk_reward": _string_or_none(plan.get("risk_reward")) or "n/a",
                 "degraded_mode": bool(plan.get("degraded_mode")) or bool(result.get("degraded_mode")),
             }
@@ -180,71 +178,90 @@ def _build_top_opportunities(
     return opportunities
 
 
-def _build_next_actions(
-    *,
-    execution_status: DictStrAny,
-    top_opportunities: list[DictStrAny],
-    warnings: list[str],
-) -> list[str]:
+def _build_next_actions(*, execution_status: DictStrAny, top_opportunities: list[DictStrAny], warnings: list[str]) -> list[str]:
     actions: list[str] = []
-
     quality = str(execution_status.get("quality", "unknown"))
     if quality == "healthy":
-        actions.append("Uu tien review cac setup co risk_reward on va lenh xac nhan quanh entry zone.")
+        actions.append("Ưu tiên review các setup có tỷ lệ lợi nhuận/rủi ro tốt và chỉ vào lệnh khi giá xác nhận quanh vùng theo dõi.")
     elif quality == "degraded":
-        actions.append("Can xem lai cac canh bao degraded/fallback truoc khi dung bao cao de vao lenh that.")
+        actions.append("Cần xem lại các cảnh báo degraded/fallback trước khi dùng báo cáo cho quyết định giao dịch thực tế.")
     else:
-        actions.append("Bao cao moi o muc partial, uu tien kiem tra cac buoc loi truoc khi dung cho quyet dinh giao dich.")
-
-    degraded_symbols = [item["symbol"] for item in top_opportunities if bool(item.get("degraded_mode"))]
-    if degraded_symbols:
-        actions.append(f"Review thu cong du lieu cho: {', '.join(degraded_symbols[:3])}.")
+        actions.append("Báo cáo mới ở mức partial, ưu tiên kiểm tra các bước lỗi trước khi dùng cho quyết định giao dịch.")
 
     actionable_symbols = [item["symbol"] for item in top_opportunities if str(item.get("status")) == "success"]
     if actionable_symbols:
-        actions.append(f"Tao watchlist hanh dong cho: {', '.join(actionable_symbols[:3])}.")
-
+        actions.append(f"Tạo watchlist hành động cho: {', '.join(actionable_symbols[:3])}.")
     if any("rate limit" in warning.lower() for warning in warnings):
-        actions.append("Neu can full scan tren cloud, can API tier cao hon hoac self-hosted runner de tranh rate limit.")
-
-    if not actions:
-        actions.append("Khong co hanh dong noi bat. Tiep tuc giam sat va cho du lieu xac nhan them.")
-
+        actions.append("Nếu cần full scan trên cloud, cần API tier cao hơn hoặc self-hosted runner để tránh rate limit.")
     return actions[:5]
 
 
-def _build_headline(
-    market_view: DictStrAny,
-    execution_status: DictStrAny,
-    top_opportunities: list[DictStrAny],
-) -> str:
+def _build_headline(market_view: DictStrAny, execution_status: DictStrAny, top_opportunities: list[DictStrAny]) -> str:
     first_symbol = top_opportunities[0]["symbol"] if top_opportunities else "watchlist"
     quality = str(execution_status.get("quality", "unknown"))
     regime = str(market_view.get("regime", "unknown"))
     if quality == "healthy":
-        return f"Thi truong {regime}; uu tien hanh dong tren {first_symbol} neu setup duoc xac nhan."
+        return f"Thị trường {regime}; ưu tiên chiến lược LONG có chọn lọc, theo dõi sát {first_symbol}."
     if quality == "degraded":
-        return f"Pipeline o che do degraded; dung {first_symbol} nhu mot y tuong can review, khong nen auto-trade."
-    return f"Pipeline chua hoan chinh; can review thu cong truoc khi hanh dong voi {first_symbol}."
+        return f"Pipeline ở chế độ degraded; dùng {first_symbol} như một ý tưởng cần review, không nên auto-trade."
+    return f"Pipeline chưa hoàn chỉnh; cần review thủ công trước khi hành động với {first_symbol}."
 
 
-def _ordered_symbols(
-    ranking_table: pd.DataFrame,
-    symbol_payloads: dict[str, DictStrAny],
-    trade_plan_payloads: dict[str, DictStrAny],
-) -> list[str]:
-    ordered: list[str] = []
+def _ordered_symbols(ranking_table: pd.DataFrame, symbol_payloads: dict[str, DictStrAny], trade_plan_payloads: dict[str, DictStrAny]) -> list[str]:
+    candidate_rows: list[tuple[float, str]] = []
+    source_symbols: list[str] = []
     if not ranking_table.empty and "symbol" in ranking_table.columns:
-        for symbol in ranking_table["symbol"].astype(str).tolist():
-            normalized = symbol.strip().upper()
-            if normalized and normalized not in ordered:
-                ordered.append(normalized)
+        source_symbols.extend(ranking_table["symbol"].astype(str).str.strip().str.upper().tolist())
+    source_symbols.extend(list(symbol_payloads.keys()))
+    source_symbols.extend(list(trade_plan_payloads.keys()))
 
-    for symbol in list(symbol_payloads.keys()) + list(trade_plan_payloads.keys()):
-        if symbol and symbol not in ordered:
-            ordered.append(symbol)
+    seen: set[str] = set()
+    for symbol in source_symbols:
+        normalized = str(symbol).strip().upper()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        analysis = symbol_payloads.get(normalized, {})
+        plan = trade_plan_payloads.get(normalized, {})
+        candidate_rows.append((_long_priority_score(normalized, ranking_table, analysis, plan), normalized))
 
-    return ordered
+    candidate_rows.sort(key=lambda item: item[0], reverse=True)
+    return [symbol for _, symbol in candidate_rows]
+
+
+def _long_priority_score(symbol: str, ranking_table: pd.DataFrame, analysis: DictStrAny, plan: DictStrAny) -> float:
+    score = 0.0
+    if not ranking_table.empty and "symbol" in ranking_table.columns:
+        row_df = ranking_table[ranking_table["symbol"].astype(str).str.upper() == symbol]
+        if not row_df.empty:
+            row = row_df.iloc[0]
+            score += float(pd.to_numeric(row.get("score", row.get("final_score")), errors="coerce") or 0.0) * 3
+            score += float(pd.to_numeric(row.get("day_change_pct"), errors="coerce") or 0.0) * 2
+            score += float(pd.to_numeric(row.get("return_3m"), errors="coerce") or 0.0) * 10
+    price_summary = _ensure_dict(analysis.get("price_summary"))
+    day_change = _to_float(price_summary.get("day_change_pct"))
+    period_change = _to_float(price_summary.get("period_change_pct"))
+    if day_change is not None:
+        score += day_change * 2
+        if day_change > 0:
+            score += 8
+        else:
+            score -= 8
+    if period_change is not None:
+        score += period_change * 0.1
+        if period_change > 0:
+            score += 4
+    setup_type = str(plan.get("setup_type", "")).strip().lower()
+    thesis = str(plan.get("thesis", "")).strip().lower()
+    if setup_type in {"pullback_buy", "breakout_or_wait"}:
+        score += 8
+    if setup_type == "avoid_or_wait":
+        score -= 12
+    if "downtrend" in thesis or "negative" in thesis:
+        score -= 6
+    if "uptrend" in thesis or "strong" in thesis:
+        score += 4
+    return score
 
 
 def _entry_zone_text(entry_zone: Any) -> str:
@@ -252,17 +269,18 @@ def _entry_zone_text(entry_zone: Any) -> str:
     low = payload.get("low")
     high = payload.get("high")
     strategy = _string_or_none(payload.get("strategy"))
+    strategy_text = {"buy_on_pullback": "mua khi điều chỉnh", "staggered_entry": "giải ngân từng phần", "entry": "vào lệnh", "wait": "chờ"}.get((strategy or "").lower(), strategy or "theo dõi")
     if low is None and high is None:
-        return strategy or "wait"
-    return f"{low} - {high} ({strategy or 'entry'})"
+        return strategy_text
+    return f"{low} - {high} ({strategy_text})"
 
 
 def _execution_summary_text(quality: str, total: int, success: int, degraded: int, failed: int) -> str:
     if quality == "healthy":
-        return f"Pipeline on dinh: {success}/{total} symbol da co ket qua kha dung."
+        return f"Pipeline ổn định: {success}/{total} mã đã có kết quả khả dụng."
     if quality == "degraded":
-        return f"Pipeline degraded: {success}/{total} symbol co ket qua, {degraded} symbol dang o che do fallback."
-    return f"Pipeline partial: {failed} symbol loi, can review thu cong."
+        return f"Pipeline degraded: {success}/{total} mã có kết quả, {degraded} mã đang ở chế độ fallback."
+    return f"Pipeline partial: {failed} mã lỗi, cần review thủ công."
 
 
 def _ensure_dict(payload: Any) -> DictStrAny:
@@ -274,3 +292,12 @@ def _string_or_none(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _to_float(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None

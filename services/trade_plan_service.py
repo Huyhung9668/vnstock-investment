@@ -51,12 +51,17 @@ def _extract_nested(source: dict[str, Any], *keys: str) -> Any:
 
 def _extract_context(analysis: dict[str, Any]) -> TradePlanContext:
     symbol = str(analysis.get("symbol", "")).strip().upper() or "UNKNOWN"
+    price_summary = _extract_nested(analysis, "price_summary") or {}
+    breadth_context = _extract_nested(analysis, "breadth_context") or {}
+    breadth_summary = _extract_nested(breadth_context, "breadth") or {}
 
     current_price = (
         _safe_float(analysis.get("current_price"))
         or _safe_float(analysis.get("last_price"))
         or _safe_float(_extract_nested(analysis, "price_summary", "current_price"))
         or _safe_float(_extract_nested(analysis, "price_summary", "last_price"))
+        or _safe_float(_extract_nested(analysis, "price_summary", "last_close"))
+        or _safe_float(price_summary.get("close"))
         or 0.0
     )
 
@@ -64,29 +69,34 @@ def _extract_context(analysis: dict[str, Any]) -> TradePlanContext:
         _safe_float(analysis.get("support"))
         or _safe_float(_extract_nested(analysis, "technical_summary", "support"))
         or _safe_float(_extract_nested(analysis, "trade_levels", "support"))
+        or _safe_float(_infer_support_from_price_summary(price_summary, current_price))
     )
 
     resistance = (
         _safe_float(analysis.get("resistance"))
         or _safe_float(_extract_nested(analysis, "technical_summary", "resistance"))
         or _safe_float(_extract_nested(analysis, "trade_levels", "resistance"))
+        or _safe_float(_infer_resistance_from_price_summary(price_summary, current_price))
     )
 
     atr = (
         _safe_float(analysis.get("atr"))
         or _safe_float(_extract_nested(analysis, "technical_summary", "atr"))
         or _safe_float(_extract_nested(analysis, "volatility", "atr"))
+        or _safe_float(_infer_atr_from_price_summary(price_summary, current_price))
     )
 
     trend = str(
         analysis.get("trend")
         or _extract_nested(analysis, "technical_summary", "trend")
+        or _infer_trend_from_price_summary(price_summary)
         or "neutral"
     ).strip().lower()
 
     momentum = str(
         analysis.get("momentum")
         or _extract_nested(analysis, "technical_summary", "momentum")
+        or _infer_momentum_from_price_summary(price_summary)
         or "neutral"
     ).strip().lower()
 
@@ -94,6 +104,7 @@ def _extract_context(analysis: dict[str, Any]) -> TradePlanContext:
         _safe_list(analysis.get("catalysts"))
         or _safe_list(_extract_nested(analysis, "news_summary", "catalyst_tags"))
         or _safe_list(_extract_nested(analysis, "news_summary", "catalysts"))
+        or _market_context_catalysts(breadth_summary)
     )
 
     risks = (
@@ -113,6 +124,82 @@ def _extract_context(analysis: dict[str, Any]) -> TradePlanContext:
         catalysts=catalysts,
         risks=risks,
     )
+
+
+def _infer_support_from_price_summary(price_summary: dict[str, Any], current_price: float) -> float | None:
+    low_min = _safe_float(price_summary.get("low_min"))
+    prev_close = _safe_float(price_summary.get("prev_close"))
+    if low_min is not None and current_price > 0:
+        support = max(low_min, current_price * 0.94)
+        return round(min(support, current_price * 0.985), 2)
+    if prev_close is not None and current_price > 0:
+        return round(min(prev_close, current_price * 0.985), 2)
+    return None
+
+
+def _infer_resistance_from_price_summary(price_summary: dict[str, Any], current_price: float) -> float | None:
+    high_max = _safe_float(price_summary.get("high_max"))
+    if high_max is not None and current_price > 0:
+        resistance = min(high_max, current_price * 1.1)
+        if resistance > current_price:
+            return round(resistance, 2)
+    if current_price > 0:
+        return round(current_price * 1.05, 2)
+    return None
+
+
+def _infer_atr_from_price_summary(price_summary: dict[str, Any], current_price: float) -> float | None:
+    high_max = _safe_float(price_summary.get("high_max"))
+    low_min = _safe_float(price_summary.get("low_min"))
+    if high_max is not None and low_min is not None and high_max > low_min:
+        return round((high_max - low_min) / 14.0, 2)
+    if current_price > 0:
+        return round(current_price * 0.03, 2)
+    return None
+
+
+def _infer_trend_from_price_summary(price_summary: dict[str, Any]) -> str | None:
+    last_close = _safe_float(price_summary.get("last_close"))
+    first_close = _safe_float(price_summary.get("first_close"))
+    period_change_pct = _safe_float(price_summary.get("period_change_pct"))
+    if period_change_pct is not None:
+        if period_change_pct >= 10:
+            return "uptrend"
+        if period_change_pct <= -10:
+            return "downtrend"
+    if last_close is not None and first_close is not None:
+        if last_close > first_close:
+            return "uptrend"
+        if last_close < first_close:
+            return "downtrend"
+    return None
+
+
+def _infer_momentum_from_price_summary(price_summary: dict[str, Any]) -> str | None:
+    day_change_pct = _safe_float(price_summary.get("day_change_pct"))
+    period_change_pct = _safe_float(price_summary.get("period_change_pct"))
+    if day_change_pct is not None:
+        if day_change_pct >= 2:
+            return "strong"
+        if day_change_pct <= -2:
+            return "weak"
+    if period_change_pct is not None:
+        if period_change_pct >= 5:
+            return "positive"
+        if period_change_pct <= -5:
+            return "negative"
+    return None
+
+
+def _market_context_catalysts(breadth_summary: dict[str, Any]) -> list[str]:
+    positive_ratio = _safe_float(breadth_summary.get("positive_ratio"))
+    ad_ratio = _safe_float(breadth_summary.get("advance_decline_ratio"))
+    catalysts: list[str] = []
+    if positive_ratio is not None and positive_ratio >= 0.55:
+        catalysts.append("Do rong thi truong dang ung ho ben mua")
+    if ad_ratio is not None and ad_ratio >= 1.1:
+        catalysts.append("Ty le advance/decline dang duy tri tren nguong tich cuc")
+    return catalysts
 
 
 def _infer_setup_type(context: TradePlanContext) -> str:

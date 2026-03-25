@@ -96,6 +96,9 @@ def test_daily_briefing_contains_chief_analysis_and_exportable_sections() -> Non
     assert any(section.get("title") == "Tom Tat Dieu Hanh" for section in content["sections"])
     assert any(section.get("title") == "Terminal Stages" for section in market_report["sections"])
     assert any(section.get("title") == "Skill Stage Outputs" for section in market_report["sections"])
+    exec_section = next(section for section in content["sections"] if section.get("title") == "Tom Tat Dieu Hanh")
+    assert isinstance(exec_section.get("paragraphs"), list)
+    assert len(exec_section["paragraphs"]) >= 3
 
 
 def test_chief_analysis_can_merge_ai_overlay() -> None:
@@ -125,3 +128,6 @@ def test_chief_analysis_can_merge_ai_overlay() -> None:
     assert chief["title"] == "Thi truong can than trong ngan han"
     assert chief["summary"] == "Dong tien co dau hieu chon loc."
     assert any(section.get("title") == "Ke Hoach Hanh Dong" for section in chief["sections"])
+    market_section = next(section for section in chief["sections"] if section.get("title") == "Trang Thai Thi Truong")
+    assert isinstance(market_section.get("paragraphs"), list)
+    assert market_section["paragraphs"]

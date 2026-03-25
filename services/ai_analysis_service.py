@@ -27,8 +27,18 @@ def load_ai_analysis_config() -> AIAnalysisConfig:
     enabled = _env_bool("AI_ANALYSIS_ENABLED", default=False)
     mode = (_env_str("AI_ANALYSIS_MODE") or "api").strip().lower()
     api_key = _env_str("OPENAI_API_KEY")
-    base_url = _env_str("OPENAI_BASE_URL") or "https://api.openai.com/v1"
-    model = _env_str("OPENAI_MODEL") or "gpt-4.1-mini"
+    if mode == "local":
+        api_key = _env_str("LOCAL_LLM_API_KEY") or api_key
+        base_url = (
+            _env_str("LOCAL_LLM_BASE_URL")
+            or _env_str("OLLAMA_BASE_URL")
+            or _env_str("OPENAI_BASE_URL")
+            or "http://localhost:11434/v1"
+        )
+        model = _env_str("LOCAL_LLM_MODEL") or _env_str("OLLAMA_MODEL") or _env_str("OPENAI_MODEL") or "qwen2.5:14b"
+    else:
+        base_url = _env_str("OPENAI_BASE_URL") or "https://api.openai.com/v1"
+        model = _env_str("OPENAI_MODEL") or "gpt-4.1-mini"
     timeout_seconds = _env_int("OPENAI_TIMEOUT_SECONDS", default=45)
     prompt_file = _env_str("AI_ANALYSIS_PROMPT_FILE")
     response_file = _env_str("AI_ANALYSIS_RESPONSE_FILE")
@@ -49,6 +59,8 @@ def ai_analysis_ready(config: AIAnalysisConfig) -> bool:
         return False
     if config.mode == "file":
         return bool(config.response_file)
+    if config.mode == "local":
+        return bool(config.base_url)
     return bool(config.api_key and config.base_url)
 
 
@@ -89,33 +101,67 @@ def _chat_completion(*, config: AIAnalysisConfig, system_prompt: str, user_promp
             user_prompt=user_prompt,
         )
 
-    response = requests.post(
-        f"{config.base_url}/chat/completions",
-        headers={
-            "Authorization": f"Bearer {config.api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": config.model,
-            "temperature": 0.3,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        },
-        timeout=config.timeout_seconds,
+    payload = _request_chat_completion(
+        config=config,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
     )
-    response.raise_for_status()
-    payload = response.json()
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         raise ValueError("AI response did not include choices.")
     message = choices[0].get("message", {})
     content = message.get("content")
+    if isinstance(content, list):
+        text_chunks = []
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    text_chunks.append(text.strip())
+        content = "\n".join(text_chunks)
     if not isinstance(content, str) or not content.strip():
         raise ValueError("AI response content was empty.")
     return content
+
+
+def _request_chat_completion(*, config: AIAnalysisConfig, system_prompt: str, user_prompt: str) -> DictStrAny:
+    url = f"{config.base_url}/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if config.api_key:
+        headers["Authorization"] = f"Bearer {config.api_key}"
+
+    base_payload = {
+        "model": config.model,
+        "temperature": 0.3,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+    payload_with_schema = {
+        **base_payload,
+        "response_format": {"type": "json_object"},
+    }
+
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload_with_schema,
+        timeout=config.timeout_seconds,
+    )
+    if response.status_code >= 400 and config.mode == "local":
+        response = requests.post(
+            url,
+            headers=headers,
+            json=base_payload,
+            timeout=config.timeout_seconds,
+        )
+
+    response.raise_for_status()
+    json_payload = response.json()
+    if not isinstance(json_payload, dict):
+        raise ValueError("AI response payload must be a JSON object.")
+    return json_payload
 
 
 def _file_completion(*, config: AIAnalysisConfig, system_prompt: str, user_prompt: str) -> str:

@@ -1,6 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
+
+from services.insight_contracts import build_analyst_brief
 
 
 DictStrAny = dict[str, Any]
@@ -27,10 +29,23 @@ def build_technical_profiles(
             }
         )
 
+    lead = profiles[0] if profiles else {}
+    brief = build_analyst_brief(
+        insight=(
+            f"Về kỹ thuật, {lead.get('symbol')} đang là mã có vùng theo dõi rõ nhất trong nhóm ưu tiên."
+            if lead.get("symbol") else "Chưa hình thành đủ hồ sơ kỹ thuật để kết luận."
+        ),
+        evidence=[f"Technical profiler đã lập hồ sơ cho {len(profiles)} mã."] if profiles else [],
+        implication="Ưu tiên hành động ở những mã có trigger và điểm vô hiệu rõ ràng, tránh mua theo cảm tính.",
+        action="Chỉ kích hoạt kế hoạch giao dịch khi giá phản ứng đúng vùng theo dõi và thanh khoản không suy yếu.",
+        risk="Mọi setup đẹp đều mất hiệu lực nếu giá xuyên thủng vùng vô hiệu với áp lực bán tăng.",
+    )
+
     return {
         "status": "ready" if profiles else "missing",
-        "summary": f"Technical profiler da lap ho so cho {len(profiles)} symbol." if profiles else "Chua co technical profiles.",
+        "summary": f"Technical profiler đã lập hồ sơ cho {len(profiles)} mã." if profiles else "Chưa có technical profiles.",
         "profiles": profiles,
+        "analyst_brief": brief,
     }
 
 

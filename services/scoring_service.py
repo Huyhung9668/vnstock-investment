@@ -45,6 +45,7 @@ def ensure_required_columns(df: pd.DataFrame) -> pd.DataFrame:
         "risk_halt_flag": 0,
         "risk_low_liquidity_flag": 0,
         "risk_extreme_volatility_flag": 0,
+        "risk_penny_stock_flag": 0,
     }
 
     for column, default_value in defaults.items():
@@ -111,11 +112,15 @@ def apply_risk_flags(df: pd.DataFrame) -> pd.DataFrame:
     working_df["risk_extreme_volatility_flag"] = _normalize_binary_flag(
         working_df["risk_extreme_volatility_flag"]
     )
+    working_df["risk_penny_stock_flag"] = _normalize_binary_flag(
+        working_df["risk_penny_stock_flag"]
+    )
 
     working_df["risk_penalty"] = (
         working_df["risk_halt_flag"] * 0.50
         + working_df["risk_low_liquidity_flag"] * 0.20
         + working_df["risk_extreme_volatility_flag"] * 0.15
+        + working_df["risk_penny_stock_flag"] * 0.15
     )
 
     working_df["final_score"] = (working_df["raw_score"] - working_df["risk_penalty"]).clip(lower=0.0)

@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--ai-mode",
-        choices=["api", "file", "off"],
+        choices=["api", "file", "local", "off"],
         default="api",
         help="AI overlay mode. Default: api.",
     )
@@ -91,6 +91,17 @@ def _configure_ai(args: argparse.Namespace) -> list[str]:
         os.environ["AI_ANALYSIS_RESPONSE_FILE"] = response_file
         notes.append(f"AI file bridge enabled. prompt={prompt_file}")
         notes.append(f"AI file bridge enabled. response={response_file}")
+        return notes
+
+    if args.ai_mode == "local":
+        if not os.getenv("OPENAI_BASE_URL", "").strip():
+            os.environ["OPENAI_BASE_URL"] = "http://localhost:11434/v1"
+        if not os.getenv("OPENAI_MODEL", "").strip():
+            os.environ["OPENAI_MODEL"] = "qwen2.5:14b"
+        notes.append(
+            f"AI local mode enabled with model={os.getenv('OPENAI_MODEL')} base_url={os.getenv('OPENAI_BASE_URL')}."
+        )
+        notes.append("Local mode works with Ollama/OpenAI-compatible local servers and does not require a cloud API key.")
         return notes
 
     api_key = os.getenv("OPENAI_API_KEY", "").strip()

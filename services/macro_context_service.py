@@ -1,6 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
+
+from services.insight_contracts import build_analyst_brief
 
 
 DictStrAny = dict[str, Any]
@@ -27,11 +29,11 @@ def build_macro_context(
     if explanation:
         summary_parts.append(explanation)
     if positive_ratio is not None:
-        summary_parts.append(f"Do rong thi truong positive_ratio = {_fmt(positive_ratio)}.")
+        summary_parts.append(f"Độ rộng thị trường hiện vào khoảng {_fmt(positive_ratio)}.")
     if themes:
-        summary_parts.append(f"Theme dang noi bat: {', '.join(themes[:3])}.")
+        summary_parts.append(f"Các theme nổi bật gồm: {', '.join(themes[:3])}.")
     if not summary_parts:
-        summary_parts.append("Chua du du lieu vi mo de dua ra boi canh manh.")
+        summary_parts.append("Chưa đủ dữ liệu vĩ mô để đưa ra bối cảnh mạnh.")
 
     sentiment = "neutral"
     if isinstance(positive_ratio, (int, float)):
@@ -39,9 +41,28 @@ def build_macro_context(
             sentiment = "supportive"
         elif positive_ratio <= 0.4:
             sentiment = "fragile"
-
     if any("degraded" in warning.lower() for warning in normalized_warnings):
         sentiment = "cautious"
+
+    brief = build_analyst_brief(
+        insight=(
+            "Bối cảnh vĩ mô và tâm lý đang ủng hộ trạng thái tích cực có chọn lọc."
+            if sentiment == "supportive"
+            else "Bối cảnh vĩ mô và tâm lý hiện nghiêng về phòng thủ, chưa phù hợp để mua lan tỏa."
+            if sentiment in {"fragile", "cautious"}
+            else "Bối cảnh vĩ mô đang ở trạng thái trung tính, cần thêm xác nhận từ dòng tiền và độ rộng."
+        ),
+        evidence=summary_parts[:3] + headline_digest[:2],
+        implication=(
+            "Ưu tiên đánh giá chất lượng dòng tiền thay vì chỉ nhìn biến động giá ngắn hạn."
+        ),
+        action=(
+            "Giữ danh sách theo dõi hẹp và chỉ nâng mức cam kết vốn khi thị trường xác nhận tốt hơn."
+        ),
+        risk=(
+            "Nếu độ rộng tiếp tục yếu, các nhịp hồi ngắn dễ trở thành cơ hội thoát hàng hơn là mở vị thế mới."
+        ),
+    )
 
     return {
         "status": "ready",
@@ -50,6 +71,7 @@ def build_macro_context(
         "macro_points": headline_digest[:5],
         "themes": themes[:5],
         "warning_count": len(normalized_warnings),
+        "analyst_brief": brief,
     }
 
 

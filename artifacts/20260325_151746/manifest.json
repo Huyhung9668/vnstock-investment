@@ -1,0 +1,60 @@
+{
+  "run_id": "20260325_151746",
+  "generated_at": "2026-03-25T15:18:57.453030",
+  "output_dir": "artifacts\\20260325_151746",
+  "manifest_path": "artifacts\\20260325_151746\\manifest.json",
+  "market_overview_markdown": "artifacts\\20260325_151746\\market_overview.md",
+  "market_overview_html": "artifacts\\20260325_151746\\market_overview.html",
+  "ranking_top10_markdown": "artifacts\\20260325_151746\\ranking_top10.md",
+  "ranking_top10_html": "artifacts\\20260325_151746\\ranking_top10.html",
+  "daily_briefing_markdown": "artifacts\\20260325_151746\\daily_briefing.md",
+  "daily_briefing_html": "artifacts\\20260325_151746\\daily_briefing.html",
+  "market_analysis_report_markdown": "artifacts\\20260325_151746\\market_analysis_report.md",
+  "market_analysis_report_html": "artifacts\\20260325_151746\\market_analysis_report.html",
+  "deep_dive_markdown_paths": [
+    "artifacts\\20260325_151746\\deep_dives\\aaa.md",
+    "artifacts\\20260325_151746\\deep_dives\\abs.md",
+    "artifacts\\20260325_151746\\deep_dives\\acb.md",
+    "artifacts\\20260325_151746\\deep_dives\\acc.md",
+    "artifacts\\20260325_151746\\deep_dives\\agg.md",
+    "artifacts\\20260325_151746\\deep_dives\\anv.md"
+  ],
+  "deep_dive_html_paths": [
+    "artifacts\\20260325_151746\\deep_dives\\aaa.html",
+    "artifacts\\20260325_151746\\deep_dives\\abs.html",
+    "artifacts\\20260325_151746\\deep_dives\\acb.html",
+    "artifacts\\20260325_151746\\deep_dives\\acc.html",
+    "artifacts\\20260325_151746\\deep_dives\\agg.html",
+    "artifacts\\20260325_151746\\deep_dives\\anv.html"
+  ],
+  "trade_plan_markdown_paths": [
+    "artifacts\\20260325_151746\\trade_plans\\aaa.md",
+    "artifacts\\20260325_151746\\trade_plans\\abs.md",
+    "artifacts\\20260325_151746\\trade_plans\\acb.md",
+    "artifacts\\20260325_151746\\trade_plans\\acc.md",
+    "artifacts\\20260325_151746\\trade_plans\\agg.md",
+    "artifacts\\20260325_151746\\trade_plans\\anv.md"
+  ],
+  "trade_plan_html_paths": [
+    "artifacts\\20260325_151746\\trade_plans\\aaa.html",
+    "artifacts\\20260325_151746\\trade_plans\\abs.html",
+    "artifacts\\20260325_151746\\trade_plans\\acb.html",
+    "artifacts\\20260325_151746\\trade_plans\\acc.html",
+    "artifacts\\20260325_151746\\trade_plans\\agg.html",
+    "artifacts\\20260325_151746\\trade_plans\\anv.html"
+  ],
+  "run_summary_markdown": "artifacts\\20260325_151746\\run_summary.md",
+  "run_summary_html": "artifacts\\20260325_151746\\run_summary.html",
+  "total_symbols": 10,
+  "exported_symbols": 10,
+  "total_files_exported": 35,
+  "warnings": [
+    "symbol=ACB warning: trade_plan degraded_mode enabled",
+    "symbol=ACC warning: trade_plan degraded_mode enabled",
+    "symbol=ABS warning: trade_plan degraded_mode enabled",
+    "symbol=AAA warning: trade_plan degraded_mode enabled",
+    "symbol=ANV warning: trade_plan degraded_mode enabled",
+    "symbol=AGG warning: trade_plan degraded_mode enabled",
+    "unexpected build_deep_dive_for_symbols error: SystemExit: Rate limit exceeded. \n============================================================\n⚠️  GIỚI HẠN API ĐÃ ĐẠT TỐI ĐA (Rate Limit Exceeded)\n============================================================\n\n📌 Bạn đã đạt giới hạn tối đa số lượt yêu cầu API trong 1 phút (minute).\n   (You have reached the maximum API request limit for this period)\n\n📊 Chi tiết (Details):\n   • Gói hiện tại: Phiên bản cộng đồng (Community)\n   • Giới hạn: 60 requests/phút\n   • Đã sử dụng: 60/60\n   • Chờ 3 giây để tiếp tục (Wait to retry)\n\n💡 Giải pháp (Solutions):\n   1️⃣ Chờ 3 giây rồi thử lại\n      (Wait and retry)\n   2️⃣ Tham gia gói thành viên tài trợ để sử dụng không bị gián đoạn\n      (Join sponsor membership for uninterrupted access)\n\n🚀 Nâng cấp (Upgrade):\n   • Gói thành viên tài trợ (180-600 request/phút - Sponsor):\n     Tham gia: https://vnstocks.com/insiders-program\n\n============================================================\n\n╔═════════════════════════════════════════════════════════════════╗\n║                                                                 ║\n║   🚫 ĐANG BỊ CHẶN BỞI GIỚI HẠN API? GIẢI PHÁP Ở ĐÂY!            ║\n║                                                                 ║\n║   ✓ Tăng ngay 10X tốc độ gọi API - Không còn lỗi RateLimit      ║\n║   ✓ Tiết kiệm 85% thời gian chờ đợi giữa các request            ║\n║                                                                 ║\n║   ➤ NÂNG CẤP NGAY VỚI GÓI TÀI TRỢ VNSTOCK:                      ║\n║     https://vnstocks.com/insiders-program                       ║\n║                                                                 ║\n╚═════════════════════════════════════════════════════════════════╝\n\n Process terminated."
+  ]
+}

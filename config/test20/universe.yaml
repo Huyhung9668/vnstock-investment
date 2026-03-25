@@ -1,0 +1,24 @@
+filters:
+  min_avg_volume: 100000
+  min_price: 3
+
+selection:
+  top_n: 10
+  hose_top_n: 300
+  other_top_n: 300
+
+runtime:
+  batch_size: 10
+  batch_sleep_seconds: 60
+  request_delay_seconds: 3.0
+  retry_attempts: 5
+  retry_backoff_seconds: 10.0
+  timeout_seconds: 60
+  checkpoint_every: 25
+  resume_from_checkpoint: true
+
+paths:
+  checkpoint_path: data/derived/universe_scan_checkpoint.csv
+  raw_scan_output: data/derived/universe_scan_raw.csv
+  ranked_output: data/derived/universe_scores.csv
+  top_output: data/derived/top10_symbols.json

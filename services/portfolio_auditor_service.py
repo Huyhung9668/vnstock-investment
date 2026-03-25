@@ -1,6 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
+
+from services.insight_contracts import build_analyst_brief
 
 
 DictStrAny = dict[str, Any]
@@ -22,13 +24,22 @@ def build_portfolio_audit(
     elif len(symbols) >= 3:
         posture = "selective offense"
 
-    summary = f"Portfolio auditor de xuat posture = {posture}."
+    summary = f"Portfolio auditor đề xuất posture = {posture}."
     if high_risk:
-        summary += f" Co {len(high_risk)} setup can giam size hoac quan sat them."
+        summary += f" Có {len(high_risk)} setup cần giảm size hoặc quan sát thêm."
+
+    brief = build_analyst_brief(
+        insight=f"Tư thế danh mục phù hợp hiện tại là {posture}.",
+        evidence=[summary],
+        implication="Danh mục nên ưu tiên ít vị thế nhưng có xác suất cao hơn là mở rộng dàn trải.",
+        action=(f"Tập trung theo dõi {', '.join(symbols[:3])}." if symbols else "Giữ danh mục gọn và chờ thêm xác nhận."),
+        risk="Nếu số setup rủi ro cao tăng lên, cần hạ mức cam kết vốn trên toàn danh mục.",
+    )
 
     return {
         "status": "ready" if opportunities else "missing",
         "posture": posture,
         "summary": summary,
         "focus_symbols": symbols[:5],
+        "analyst_brief": brief,
     }

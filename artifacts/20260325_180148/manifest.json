@@ -1,0 +1,50 @@
+{
+  "run_id": "20260325_180148",
+  "generated_at": "2026-03-25T18:02:54.851100",
+  "output_dir": "artifacts\\20260325_180148",
+  "manifest_path": "artifacts\\20260325_180148\\manifest.json",
+  "market_overview_markdown": "artifacts\\20260325_180148\\market_overview.md",
+  "market_overview_html": "artifacts\\20260325_180148\\market_overview.html",
+  "ranking_top10_markdown": "artifacts\\20260325_180148\\ranking_top10.md",
+  "ranking_top10_html": "artifacts\\20260325_180148\\ranking_top10.html",
+  "daily_briefing_markdown": "artifacts\\20260325_180148\\daily_briefing.md",
+  "daily_briefing_html": "artifacts\\20260325_180148\\daily_briefing.html",
+  "market_analysis_report_markdown": "artifacts\\20260325_180148\\market_analysis_report.md",
+  "market_analysis_report_html": "artifacts\\20260325_180148\\market_analysis_report.html",
+  "deep_dive_markdown_paths": [
+    "artifacts\\20260325_180148\\deep_dives\\abs.md",
+    "artifacts\\20260325_180148\\deep_dives\\acb.md",
+    "artifacts\\20260325_180148\\deep_dives\\acc.md",
+    "artifacts\\20260325_180148\\deep_dives\\adg.md",
+    "artifacts\\20260325_180148\\deep_dives\\ads.md"
+  ],
+  "deep_dive_html_paths": [
+    "artifacts\\20260325_180148\\deep_dives\\abs.html",
+    "artifacts\\20260325_180148\\deep_dives\\acb.html",
+    "artifacts\\20260325_180148\\deep_dives\\acc.html",
+    "artifacts\\20260325_180148\\deep_dives\\adg.html",
+    "artifacts\\20260325_180148\\deep_dives\\ads.html"
+  ],
+  "trade_plan_markdown_paths": [
+    "artifacts\\20260325_180148\\trade_plans\\abs.md",
+    "artifacts\\20260325_180148\\trade_plans\\acb.md",
+    "artifacts\\20260325_180148\\trade_plans\\acc.md",
+    "artifacts\\20260325_180148\\trade_plans\\adg.md",
+    "artifacts\\20260325_180148\\trade_plans\\ads.md"
+  ],
+  "trade_plan_html_paths": [
+    "artifacts\\20260325_180148\\trade_plans\\abs.html",
+    "artifacts\\20260325_180148\\trade_plans\\acb.html",
+    "artifacts\\20260325_180148\\trade_plans\\acc.html",
+    "artifacts\\20260325_180148\\trade_plans\\adg.html",
+    "artifacts\\20260325_180148\\trade_plans\\ads.html"
+  ],
+  "run_summary_markdown": "artifacts\\20260325_180148\\run_summary.md",
+  "run_summary_html": "artifacts\\20260325_180148\\run_summary.html",
+  "total_symbols": 5,
+  "exported_symbols": 5,
+  "total_files_exported": 31,
+  "warnings": [
+    "step=compose_ai_briefing | failed: HTTPError: 401 Client Error: Unauthorized for url: https://api.vectorengine.ai/v1/chat/completions"
+  ]
+}

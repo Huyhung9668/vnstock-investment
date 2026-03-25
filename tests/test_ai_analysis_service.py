@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from services.ai_analysis_service import (
+    ai_analysis_ready,
     build_ai_daily_briefing,
     load_ai_analysis_config,
 )
@@ -61,3 +62,18 @@ def test_file_mode_reads_local_response_and_dumps_prompt(
     assert prompt_payload["provider"] == "local_file_bridge"
     assert prompt_payload["model"] == "codex-local-bridge"
     assert "base_briefing" in prompt_payload["user_prompt"]
+
+
+def test_local_mode_is_ready_without_cloud_api_key(monkeypatch) -> None:
+    monkeypatch.setenv("AI_ANALYSIS_ENABLED", "true")
+    monkeypatch.setenv("AI_ANALYSIS_MODE", "local")
+    monkeypatch.setenv("LOCAL_LLM_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen2.5:14b")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    config = load_ai_analysis_config()
+
+    assert config.mode == "local"
+    assert config.base_url == "http://localhost:11434/v1"
+    assert config.model == "qwen2.5:14b"
+    assert ai_analysis_ready(config) is True

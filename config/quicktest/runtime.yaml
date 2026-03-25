@@ -1,0 +1,33 @@
+mode: free
+
+selection:
+  mode: top_from_universe   # watchlist | top_from_universe
+  top_n: 20
+  universe_top_file: data/derived/top10_symbols.json
+  fallback_to_watchlist: true
+
+output:
+  report_dir: reports
+  manifest_dir: manifests
+
+features:
+  news: true
+  financials: true
+  breadth: true
+  market_overview: true
+
+notification:
+  telegram:
+    enabled: true
+    bot_token: "YOUR_BOT_TOKEN"
+    chat_id: "YOUR_CHAT_ID"
+
+provider_runtime:
+  request_delay_seconds: 1.0
+  retry_attempts: 3
+  retry_backoff_seconds: 2.0
+  batch_size: 20
+  batch_sleep_seconds: 10.0
+
+data_quality:
+  min_score: 0.7

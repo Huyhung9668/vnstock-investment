@@ -32,6 +32,12 @@ def _enrich_defaults(df: pd.DataFrame) -> pd.DataFrame:
     if "sector" not in working_df.columns:
         working_df["sector"] = "UNKNOWN"
 
+    if "exchange" not in working_df.columns:
+        working_df["exchange"] = "UNKNOWN"
+
+    if "last_price" not in working_df.columns:
+        working_df["last_price"] = 0.0
+
     if "volume_ratio_20d" not in working_df.columns:
         working_df["volume_ratio_20d"] = 1.0
 
@@ -52,9 +58,10 @@ def _enrich_defaults(df: pd.DataFrame) -> pd.DataFrame:
         working_df["risk_halt_flag"] = 0
 
     if "risk_low_liquidity_flag" not in working_df.columns:
-        working_df["risk_low_liquidity_flag"] = (
-            pd.to_numeric(working_df.get("avg_volume", 0), errors="coerce").fillna(0) < 150_000
-        ).astype(int)
+        avg_volume = pd.to_numeric(working_df.get("avg_volume", 0), errors="coerce").fillna(0)
+        exchange = working_df.get("exchange", "UNKNOWN").astype(str).str.upper()
+        liquidity_floor = exchange.map({"HOSE": 300_000, "HNX": 150_000, "UPCOM": 100_000}).fillna(150_000)
+        working_df["risk_low_liquidity_flag"] = (avg_volume < liquidity_floor).astype(int)
 
     if "risk_extreme_volatility_flag" not in working_df.columns:
         volatility_proxy = pd.to_numeric(
@@ -62,6 +69,10 @@ def _enrich_defaults(df: pd.DataFrame) -> pd.DataFrame:
             errors="coerce",
         ).abs().fillna(0)
         working_df["risk_extreme_volatility_flag"] = (volatility_proxy > 0.35).astype(int)
+
+    if "risk_penny_stock_flag" not in working_df.columns:
+        last_price = pd.to_numeric(working_df.get("last_price", 0), errors="coerce").fillna(0)
+        working_df["risk_penny_stock_flag"] = (last_price < 5).astype(int)
 
     return working_df
 

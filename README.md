@@ -84,6 +84,21 @@ Neu muon dung file bridge:
 .\.venv\Scripts\python.exe scripts/run_trading_terminal.py --ai-mode file
 ```
 
+Neu muon dung local LLM qua Ollama, khong can API cloud:
+
+```powershell
+ollama serve
+ollama pull qwen2.5:14b
+.\.venv\Scripts\python.exe scripts/run_trading_terminal.py --ai-mode local --openai-model qwen2.5:14b
+```
+
+Mac dinh local mode se dung:
+
+- `LOCAL_LLM_BASE_URL` hoac `OLLAMA_BASE_URL` hoac `OPENAI_BASE_URL`
+- fallback cuoi cung: `http://localhost:11434/v1`
+- `LOCAL_LLM_MODEL` hoac `OLLAMA_MODEL` hoac `OPENAI_MODEL`
+- fallback cuoi cung: `qwen2.5:14b`
+
 Mot so tuy chon:
 
 - `--skip-scan`: bo qua universe scan, dung lai du lieu da co

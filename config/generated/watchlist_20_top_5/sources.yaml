@@ -1,0 +1,7 @@
+providers:
+  primary: free
+  fallback: free
+services:
+  market: free
+  news: free
+  financials: free

@@ -515,6 +515,27 @@ def _build_breadth_context_override(context: RunContext) -> dict[str, Any] | Non
     return payload
 
 
+def _deep_dive_symbol_delay_seconds(runtime_config: DictStrAny) -> float:
+    env_override = _env_str("DEEP_DIVE_SYMBOL_DELAY_SECONDS")
+    if env_override is not None:
+        try:
+            return max(0.0, float(env_override))
+        except ValueError:
+            return 0.0
+
+    provider_runtime = runtime_config.get("provider_runtime")
+    if not isinstance(provider_runtime, dict):
+        return 0.0
+
+    request_delay = provider_runtime.get("request_delay_seconds", 0.0)
+    try:
+        request_delay_value = float(request_delay)
+    except (TypeError, ValueError):
+        request_delay_value = 0.0
+
+    return max(0.0, request_delay_value)
+
+
 def _build_degraded_trade_plan(symbol: str, reason: str) -> dict[str, Any]:
     return {
         "symbol": symbol,
@@ -855,6 +876,13 @@ def select_top_symbols(runtime_bundle: RuntimeConfigBundle, context: RunContext)
             context.total_selected = len(context.symbols_selected)
             if not context.symbols_selected:
                 _warn_step(context, "select_top_symbols", "watchlist selection mode but watchlist is empty.")
+                return
+            if not context.ranking_table.empty:
+                context.ranking_table = context.ranking_table[
+                    context.ranking_table["symbol"].astype(str).str.upper().isin(context.symbols_selected)
+                ].copy().reset_index(drop=True)
+                if not context.ranking_table.empty:
+                    context.ranking_table["rank"] = range(1, len(context.ranking_table) + 1)
             return
 
         top_symbols_path = _resolve_top_symbols_path(runtime_bundle.runtime)
@@ -907,7 +935,9 @@ def build_deep_dive_for_symbols(runtime_bundle: RuntimeConfigBundle, context: Ru
             _warn_step(context, "build_deep_dive_for_symbols", "skipped because symbols_selected is empty.")
             return
 
-        for symbol in context.symbols_selected:
+        symbol_delay_seconds = _deep_dive_symbol_delay_seconds(runtime_bundle.runtime)
+
+        for index, symbol in enumerate(context.symbols_selected):
             logging.info("symbol=%s | deep_dive start", symbol)
             try:
                 result = _build_symbol_artifacts(
@@ -916,8 +946,14 @@ def build_deep_dive_for_symbols(runtime_bundle: RuntimeConfigBundle, context: Ru
                     provider_name=context.primary_provider,
                     runtime_bundle=runtime_bundle,
                 )
-            except Exception as primary_exc:
-                _log_error("build_deep_dive_for_symbols", primary_exc, symbol=symbol)
+            except BaseException as primary_exc:
+                _re_raise_if_keyboard_interrupt(primary_exc)
+                logging.error(
+                    "step=build_deep_dive_for_symbols | symbol=%s | %s: %s",
+                    symbol,
+                    type(primary_exc).__name__,
+                    primary_exc,
+                )
                 if context.fallback_provider and context.fallback_provider != context.primary_provider:
                     try:
                         result = _build_symbol_artifacts(
@@ -931,8 +967,14 @@ def build_deep_dive_for_symbols(runtime_bundle: RuntimeConfigBundle, context: Ru
                             0,
                             f"primary provider failed; fallback used: {context.primary_provider} -> {context.fallback_provider}",
                         )
-                    except Exception as fallback_exc:
-                        _log_error("build_deep_dive_for_symbols", fallback_exc, symbol=symbol)
+                    except BaseException as fallback_exc:
+                        _re_raise_if_keyboard_interrupt(fallback_exc)
+                        logging.error(
+                            "step=build_deep_dive_for_symbols | symbol=%s | fallback | %s: %s",
+                            symbol,
+                            type(fallback_exc).__name__,
+                            fallback_exc,
+                        )
                         result = SymbolRunResult(
                             symbol=symbol,
                             status="failed",
@@ -975,6 +1017,9 @@ def build_deep_dive_for_symbols(runtime_bundle: RuntimeConfigBundle, context: Ru
                 result.report_path,
                 result.manifest_path,
             )
+            if symbol_delay_seconds > 0 and index < len(context.symbols_selected) - 1:
+                logging.info("symbol=%s | throttling next deep_dive for %.1f seconds", symbol, symbol_delay_seconds)
+                time.sleep(symbol_delay_seconds)
     except Exception as exc:
         _log_error("build_deep_dive_for_symbols", exc)
         _warn_step(context, "build_deep_dive_for_symbols", f"failed: {type(exc).__name__}: {exc}")
@@ -1171,6 +1216,7 @@ def build_final_summary(runtime_bundle: RuntimeConfigBundle, context: RunContext
     summary = {
         "run_id": context.run_id,
         "headline": context.daily_briefing_payload.get("headline"),
+        "chief_analysis": dict(context.daily_briefing_payload.get("chief_analysis", {})),
         "selection_mode": context.selection_mode,
         "symbols_selected": list(context.symbols_selected),
         "total": total_candidates,
