@@ -41,8 +41,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--ai-mode",
         choices=["api", "file", "local", "off"],
-        default="api",
-        help="AI overlay mode. Default: api.",
+        default="local",
+        help="AI overlay mode. Default: local.",
     )
     parser.add_argument(
         "--openai-model",

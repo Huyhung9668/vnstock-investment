@@ -6,9 +6,13 @@ from typing import Any
 import pandas as pd
 
 from services.chief_analysis_writer_service import build_chief_analysis
+from services.entry_execution_service import build_entry_execution_plan
+from services.long_candidate_service import build_long_candidates
 from services.market_synthesis_service import build_market_synthesis
+from services.news_impact_service import build_news_impact
 from services.skill_pipeline_service import build_skill_pipeline_payload
 from services.terminal_orchestrator_service import build_terminal_orchestration
+from services.vnindex_context_service import build_vnindex_context
 
 
 DictStrAny = dict[str, Any]
@@ -34,6 +38,7 @@ def build_daily_briefing(
     normalized_results = [dict(item) for item in (symbol_results or []) if isinstance(item, dict)]
     normalized_warnings = [str(item).strip() for item in (warnings or []) if str(item).strip()]
     normalized_ranking = ranking_table.copy() if isinstance(ranking_table, pd.DataFrame) else pd.DataFrame()
+    market_news_summary = _load_market_news_summary(PROJECT_ROOT)
 
     market_view = _build_market_view(selection_mode, normalized_market, normalized_warnings)
     execution_status = _build_execution_status(normalized_results, normalized_warnings)
@@ -43,6 +48,22 @@ def build_daily_briefing(
         trade_plan_payloads=normalized_trade_plans,
         symbol_results=normalized_results,
     )
+    vnindex_context = build_vnindex_context(market_overview=normalized_market)
+    news_impact = build_news_impact(
+        market_news_summary=market_news_summary,
+        symbol_payloads=normalized_symbols,
+        warnings=normalized_warnings,
+    )
+    long_candidates = build_long_candidates(
+        ranking_table=normalized_ranking,
+        symbol_payloads=normalized_symbols,
+        trade_plan_payloads=normalized_trade_plans,
+        top_n=5,
+    )
+    selected_longs = list(long_candidates.get("selected") or [])
+    if selected_longs:
+        top_opportunities = selected_longs
+    entry_execution = build_entry_execution_plan(selected_candidates=top_opportunities)
     next_actions = _build_next_actions(
         execution_status=execution_status,
         top_opportunities=top_opportunities,
@@ -89,6 +110,10 @@ def build_daily_briefing(
         "selection_mode": selection_mode,
         "market_view": market_view,
         "execution_status": execution_status,
+        "vnindex_context": vnindex_context,
+        "news_impact": news_impact,
+        "long_candidates": long_candidates,
+        "entry_execution": entry_execution,
         "top_opportunities": top_opportunities,
         "next_actions": next_actions,
         "warnings": normalized_warnings[:10],
@@ -162,16 +187,23 @@ def _build_top_opportunities(
         analysis = symbol_payloads.get(symbol, {})
         plan = trade_plan_payloads.get(symbol, {})
         result = results_by_symbol.get(symbol, {})
+        price_summary = _ensure_dict(analysis.get("price_summary"))
+        day_change = _to_float(price_summary.get("day_change_pct"))
+        period_change = _to_float(price_summary.get("period_change_pct"))
+        setup_type = _string_or_none(plan.get("setup_type")) or "unknown"
         opportunities.append(
             {
                 "symbol": symbol,
                 "status": str(result.get("status", "unknown")),
-                "setup_type": _string_or_none(plan.get("setup_type")) or "unknown",
-                "thesis": _string_or_none(plan.get("thesis")) or _string_or_none(analysis.get("thesis")) or "Cần review thêm trước khi hành động.",
+                "setup_type": setup_type,
+                "thesis": _string_or_none(plan.get("thesis")) or _string_or_none(analysis.get("thesis")) or "Cần đánh giá thêm trước khi hành động.",
                 "trigger": _entry_zone_text(plan.get("entry_zone")),
-                "invalidation": _string_or_none(plan.get("invalidation")) or "Chưa có invalidation rõ ràng.",
+                "invalidation": _string_or_none(plan.get("invalidation")) or "Chưa có điều kiện vô hiệu rõ ràng.",
                 "risk_reward": _string_or_none(plan.get("risk_reward")) or "n/a",
                 "degraded_mode": bool(plan.get("degraded_mode")) or bool(result.get("degraded_mode")),
+                "day_change_pct": day_change,
+                "period_change_pct": period_change,
+                "long_case": _build_long_case(symbol=symbol, day_change=day_change, period_change=period_change, setup_type=setup_type),
             }
         )
 
@@ -208,60 +240,54 @@ def _build_headline(market_view: DictStrAny, execution_status: DictStrAny, top_o
 
 
 def _ordered_symbols(ranking_table: pd.DataFrame, symbol_payloads: dict[str, DictStrAny], trade_plan_payloads: dict[str, DictStrAny]) -> list[str]:
-    candidate_rows: list[tuple[float, str]] = []
-    source_symbols: list[str] = []
-    if not ranking_table.empty and "symbol" in ranking_table.columns:
-        source_symbols.extend(ranking_table["symbol"].astype(str).str.strip().str.upper().tolist())
-    source_symbols.extend(list(symbol_payloads.keys()))
-    source_symbols.extend(list(trade_plan_payloads.keys()))
-
+    ordered: list[str] = []
     seen: set[str] = set()
-    for symbol in source_symbols:
-        normalized = str(symbol).strip().upper()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        analysis = symbol_payloads.get(normalized, {})
-        plan = trade_plan_payloads.get(normalized, {})
-        candidate_rows.append((_long_priority_score(normalized, ranking_table, analysis, plan), normalized))
-
-    candidate_rows.sort(key=lambda item: item[0], reverse=True)
-    return [symbol for _, symbol in candidate_rows]
-
-
-def _long_priority_score(symbol: str, ranking_table: pd.DataFrame, analysis: DictStrAny, plan: DictStrAny) -> float:
-    score = 0.0
     if not ranking_table.empty and "symbol" in ranking_table.columns:
-        row_df = ranking_table[ranking_table["symbol"].astype(str).str.upper() == symbol]
-        if not row_df.empty:
-            row = row_df.iloc[0]
-            score += float(pd.to_numeric(row.get("score", row.get("final_score")), errors="coerce") or 0.0) * 3
-            score += float(pd.to_numeric(row.get("day_change_pct"), errors="coerce") or 0.0) * 2
-            score += float(pd.to_numeric(row.get("return_3m"), errors="coerce") or 0.0) * 10
-    price_summary = _ensure_dict(analysis.get("price_summary"))
-    day_change = _to_float(price_summary.get("day_change_pct"))
-    period_change = _to_float(price_summary.get("period_change_pct"))
-    if day_change is not None:
-        score += day_change * 2
-        if day_change > 0:
-            score += 8
-        else:
-            score -= 8
-    if period_change is not None:
-        score += period_change * 0.1
-        if period_change > 0:
-            score += 4
-    setup_type = str(plan.get("setup_type", "")).strip().lower()
-    thesis = str(plan.get("thesis", "")).strip().lower()
-    if setup_type in {"pullback_buy", "breakout_or_wait"}:
-        score += 8
-    if setup_type == "avoid_or_wait":
-        score -= 12
-    if "downtrend" in thesis or "negative" in thesis:
-        score -= 6
-    if "uptrend" in thesis or "strong" in thesis:
-        score += 4
-    return score
+        for symbol in ranking_table["symbol"].astype(str).str.strip().str.upper().tolist():
+            if symbol and symbol not in seen:
+                seen.add(symbol)
+                ordered.append(symbol)
+    for symbol in list(symbol_payloads.keys()) + list(trade_plan_payloads.keys()):
+        normalized = str(symbol).strip().upper()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            ordered.append(normalized)
+    return ordered
+
+
+def _build_long_case(*, symbol: str, day_change: float | None, period_change: float | None, setup_type: str) -> str:
+    day_text = _format_signed_pct(day_change)
+    period_text = _format_signed_pct(period_change)
+    action_text = {
+        "pullback_buy": "phù hợp cho kịch bản LONG khi giá điều chỉnh về vùng theo dõi",
+        "breakout_or_wait": "phù hợp cho kịch bản LONG nếu xuất hiện xác nhận bứt phá",
+        "avoid_or_wait": "chưa phải ứng viên LONG ưu tiên, cần quan sát thêm",
+        "unknown": "cần thêm xác nhận trước khi nâng lên kế hoạch LONG",
+    }.get((setup_type or "unknown").lower(), "cần thêm xác nhận trước khi nâng lên kế hoạch LONG")
+    parts = [f"{symbol} hiện {action_text}"]
+    if day_text:
+        parts.append(f"biến động phiên gần nhất {day_text}")
+    if period_text:
+        parts.append(f"xu hướng 3 tháng {period_text}")
+    return "; ".join(parts) + "."
+
+
+def _format_signed_pct(value: float | None) -> str:
+    if value is None:
+        return ""
+    sign = "+" if value > 0 else ""
+    return f"{sign}{value:.2f}%"
+
+
+def _regime_text(value: str) -> str:
+    mapping = {
+        "risk_off": "thận trọng",
+        "risk_on": "tích cực",
+        "balanced": "cân bằng",
+        "narrow_leadership": "phân hóa hẹp",
+        "unknown": "chưa rõ",
+    }
+    return mapping.get(str(value).strip().lower(), str(value).strip().lower() or "chưa rõ")
 
 
 def _entry_zone_text(entry_zone: Any) -> str:
@@ -284,6 +310,19 @@ def _execution_summary_text(quality: str, total: int, success: int, degraded: in
 
 
 def _ensure_dict(payload: Any) -> DictStrAny:
+    return dict(payload) if isinstance(payload, dict) else {}
+
+
+def _load_market_news_summary(project_root: Path) -> DictStrAny:
+    path = project_root / "data" / "derived" / "market_news_summary.json"
+    if not path.exists():
+        return {}
+    try:
+        import json
+
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
     return dict(payload) if isinstance(payload, dict) else {}
 
 

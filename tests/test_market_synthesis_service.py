@@ -89,6 +89,8 @@ def test_daily_briefing_contains_chief_analysis_and_exportable_sections() -> Non
     assert "chief_analysis" in briefing
     assert "terminal_orchestration" in briefing
     assert "skill_pipeline" in briefing
+    assert "chart_pattern_lab" in briefing["skill_pipeline"]["stages"]
+    assert "order_engine" in briefing["skill_pipeline"]["stages"]
     content = _build_daily_briefing_content(briefing)
     market_report = _build_market_analysis_report_content(briefing)
 

@@ -14,10 +14,11 @@ Dong vai tro dieu phoi cap cao cho toan bo he skill.
 - Setup moi truong: `10-vnstock-env-setup`
 - Lay du lieu: `13-source-registry`, `14-vnstock-data-fetcher`, `20-news-crawler`, `21-report-extractor`
 - Bao ve chat luong: `22-data-guardian`, `23-event-calendar`
-- Boi canh thi truong: `30-macro-news`, `31-market-radar`, `32-futures-radar`, `33-flow-of-funds`
-- Chon va profile co phieu: `40-stock-scanner`, `41-technical-profiler`, `42-fundamental-profiler`, `43-chart-pattern-lab`
+- Boi canh thi truong: `30-macro-news`, `31-market-radar`, `32-futures-radar`, `33-flow-of-funds`, `34-sector-leadership-note`, `35-shock-cycle-reader`, `36-foreign-flow-lens`
+- Chon va profile co phieu: `40-stock-scanner`, `41-technical-profiler`, `42-fundamental-profiler`, `43-chart-pattern-lab`, `44-long-candidate-selector`
 - Quy hoach hanh dong: `50-account-manager`, `51-market-maker`, `52-order-engine`, `53-risk-engine`
-- Tong hop va dong goi: `60-market-analyst`, `61-portfolio-auditor`, `70-market-synthesis`, `71-chief-analysis-writer`, `62-professional-pdf`, `63-dashboard-publisher`
+- Thuc thi lenh: `54-entry-scaling-playbook`
+- Tong hop va dong goi: `60-market-analyst`, `61-portfolio-auditor`, `70-market-synthesis`, `71-chief-analysis-writer`, `73-telegram-market-brief`, `62-professional-pdf`, `63-dashboard-publisher`
 
 ## Nguyen tac dieu phoi
 

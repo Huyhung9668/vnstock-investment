@@ -196,9 +196,9 @@ def _market_context_catalysts(breadth_summary: dict[str, Any]) -> list[str]:
     ad_ratio = _safe_float(breadth_summary.get("advance_decline_ratio"))
     catalysts: list[str] = []
     if positive_ratio is not None and positive_ratio >= 0.55:
-        catalysts.append("Do rong thi truong dang ung ho ben mua")
+        catalysts.append("Độ rộng thị trường đang ủng hộ bên mua")
     if ad_ratio is not None and ad_ratio >= 1.1:
-        catalysts.append("Ty le advance/decline dang duy tri tren nguong tich cuc")
+        catalysts.append("Tỷ lệ advance/decline đang duy trì trên ngưỡng tích cực")
     return catalysts
 
 
@@ -280,7 +280,7 @@ def _build_confirmation(context: TradePlanContext, entry_zone: dict[str, Any]) -
         checks.append("Giá đóng cửa giữ trên vùng entry sau khi giải ngân thăm dò.")
 
     if context.resistance is not None:
-        checks.append(f"Ưu tiên khi giá vượt/giữ được trên vùng cản gần {round(context.resistance, 2)}.")
+        checks.append(f"Ưu tiên khi giá vượt hoặc giữ được trên vùng cản gần {round(context.resistance, 2)}.")
 
     if "strong" in context.momentum or "up" in context.trend:
         checks.append("Thanh khoản duy trì tích cực, không suy yếu rõ rệt so với các phiên gần nhất.")
@@ -357,7 +357,7 @@ def _build_risk_reward(entry_zone: dict[str, Any], stop_loss: float | None, targ
 
 def _build_position_sizing_hint(context: TradePlanContext, risk_reward: float | None) -> str:
     if context.risks:
-        return "Giảm quy mô vị thế, ưu tiên thăm dò 25%–33% size chuẩn do còn risk tags."
+        return "Giảm quy mô vị thế, ưu tiên thăm dò 25%-33% size chuẩn do còn risk tags."
     if risk_reward is not None and risk_reward >= 1.5:
         return "Có thể vào 2 nhịp: 50% vị thế thăm dò, 50% còn lại khi có xác nhận."
     return "Ưu tiên vị thế nhỏ đến trung bình, giải ngân từng phần thay vì vào đủ ngay."

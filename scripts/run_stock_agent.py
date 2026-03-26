@@ -53,9 +53,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--ai-mode",
-        choices=["api", "file", "off"],
-        default="api",
-        help="AI overlay mode.",
+        choices=["api", "file", "local", "off"],
+        default="local",
+        help="AI overlay mode. Default: local.",
     )
     parser.add_argument("--openai-model", default=None)
     parser.add_argument("--openai-base-url", default=None)
@@ -82,6 +82,13 @@ def _set_ai_env(args: argparse.Namespace) -> None:
         response_file = args.response_file or str(PROJECT_ROOT / "artifacts" / "ai_response.json")
         daily_run.os.environ["AI_ANALYSIS_PROMPT_FILE"] = prompt_file
         daily_run.os.environ["AI_ANALYSIS_RESPONSE_FILE"] = response_file
+        return
+
+    if args.ai_mode == "local":
+        if not daily_run.os.getenv("OPENAI_BASE_URL", "").strip():
+            daily_run.os.environ["OPENAI_BASE_URL"] = "http://localhost:11434/v1"
+        if not daily_run.os.getenv("OPENAI_MODEL", "").strip():
+            daily_run.os.environ["OPENAI_MODEL"] = "qwen2.5:14b"
 
 
 def _flow_output_dir(run_id: str) -> Path:
@@ -151,7 +158,7 @@ def _run_subset(stage: str, args: argparse.Namespace) -> tuple[daily_run.Runtime
         _record_step(results, 8, "rank_and_select_top_candidates", lambda: _run_ranking_steps(runtime_bundle, context))
         _record_step(results, 9, "aggregate_market_and_symbol_news", lambda: _news_context_step(context))
         _record_step(results, 10, "deep_dive_top_10", lambda: _run_deep_dive_steps(runtime_bundle, context))
-        _record_step(results, 11, "openai_market_and_symbol_synthesis", lambda: _run_briefing_steps(runtime_bundle, context, with_ai=True))
+        _record_step(results, 11, "llm_market_and_symbol_synthesis", lambda: _run_briefing_steps(runtime_bundle, context, with_ai=True))
         if stage == "intelligence":
             return runtime_bundle, context, results
 

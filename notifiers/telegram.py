@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 from typing import Any
@@ -20,38 +20,32 @@ class TelegramNotifier:
         return f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
 
     def send_message(self, text: str) -> bool:
+        return self.send_messages([text])
+
+    def send_messages(self, messages: list[str]) -> bool:
         if not self.enabled:
             logger.info("Telegram notifier disabled.")
             return False
-
         try:
-            if len(str(text)) <= MAX_TELEGRAM_TEXT_LENGTH:
-                response = self._post_message(text=text, parse_mode="Markdown")
-                if response.status_code == 200:
-                    return True
-                logger.warning("Telegram send failed: %s", response.text)
-                if response.status_code == 400:
-                    return self._send_chunked_plain_text(_plain_text_message(text))
+            normalized = [_plain_text_message(message) for message in messages if str(message).strip()]
+            if not normalized:
                 return False
-
-            logger.info("Telegram message exceeds safe length; using chunked plain text mode.")
-            return self._send_chunked_plain_text(_plain_text_message(text))
+            total_chunks = 0
+            for message in normalized:
+                chunks = _chunk_message(message, max_length=MAX_TELEGRAM_TEXT_LENGTH)
+                if not chunks:
+                    continue
+                total_chunks += len(chunks)
+                for chunk in chunks:
+                    response = self._post_message(text=chunk, parse_mode=None)
+                    if response.status_code != 200:
+                        logger.warning("Telegram plain text send failed: %s", response.text)
+                        return False
+            logger.info("Telegram message sent successfully in %s chunk(s).", total_chunks)
+            return True
         except Exception as exc:
             logger.warning("Telegram error: %s", exc)
             return False
-
-    def _send_chunked_plain_text(self, text: str) -> bool:
-        chunks = _chunk_message(text, max_length=MAX_TELEGRAM_TEXT_LENGTH)
-        if not chunks:
-            return False
-        for index, chunk in enumerate(chunks, start=1):
-            prefix = f"[{index}/{len(chunks)}]\n" if len(chunks) > 1 else ""
-            response = self._post_message(text=prefix + chunk, parse_mode=None)
-            if response.status_code != 200:
-                logger.warning("Telegram plain text chunk %s failed: %s", index, response.text)
-                return False
-        logger.info("Telegram message sent successfully in %s chunk(s).", len(chunks))
-        return True
 
     def _post_message(self, *, text: str, parse_mode: str | None) -> requests.Response:
         payload = {"chat_id": self.chat_id, "text": text}
@@ -61,120 +55,301 @@ class TelegramNotifier:
 
 
 def build_daily_summary_message(summary: dict[str, Any]) -> str:
-    chief_analysis = summary.get("chief_analysis")
-    if isinstance(chief_analysis, dict) and chief_analysis:
-        rendered = _render_telegram_brief(chief_analysis, summary)
-        if rendered.strip():
-            return rendered
-    return _render_fallback_narrative(summary)
+    return "\n\n".join(build_daily_summary_messages(summary)).strip()
 
 
-def _render_telegram_brief(chief_analysis: dict[str, Any], summary: dict[str, Any]) -> str:
-    lines: list[str] = []
-    title = str(chief_analysis.get("title") or "Nhận Định Thị Trường").strip()
-    update_line = str(chief_analysis.get("update_line") or f"Cập nhật: {summary.get('run_id', '')}").strip()
-    summary_text = str(chief_analysis.get("summary") or summary.get("headline") or "").strip()
-    sections = chief_analysis.get("sections") if isinstance(chief_analysis.get("sections"), list) else []
+def build_daily_summary_messages(summary: dict[str, Any]) -> list[str]:
+    run_id = str(summary.get("run_id") or "").strip()
+    vnindex_context = dict(summary.get("vnindex_context") or {})
+    news_impact = dict(summary.get("news_impact") or {})
+    long_candidates = dict(summary.get("long_candidates") or {})
+    entry_execution = dict(summary.get("entry_execution") or {})
+    top_opportunities = [dict(item) for item in (summary.get("top_opportunities") or []) if isinstance(item, dict)]
 
-    lines.extend([title, update_line])
-    if summary_text:
-        lines.extend(["", summary_text])
+    messages = [
+        _build_market_message(run_id, vnindex_context, summary),
+        _build_news_message(run_id, news_impact),
+        _build_top5_message(run_id, long_candidates, top_opportunities),
+        _build_entry_message(run_id, entry_execution, top_opportunities),
+    ]
+    return [message for message in messages if message.strip()]
 
-    for index, section in enumerate(sections[:5], start=1):
-        if not isinstance(section, dict):
-            continue
-        section_title = str(section.get("title") or "").strip()
-        paragraphs = [str(item).strip() for item in section.get("paragraphs", []) if str(item).strip()] if isinstance(section.get("paragraphs"), list) else []
-        bullets = [str(item).strip() for item in section.get("bullets", []) if str(item).strip()] if isinstance(section.get("bullets"), list) else []
-        if not section_title:
-            continue
-        lines.extend(["", f"{index}. {section_title}"])
-        if paragraphs:
-            lines.append(paragraphs[0])
-        if bullets and index >= 4:
-            lines.extend([f"- {item}" for item in bullets[:3]])
 
-    actions = _extract_section(sections, "Kế Hoạch Hành Động")
-    risks = _extract_section(sections, "Rủi Ro Cần Theo Dõi")
-    conclusion = _extract_section(sections, "Kết Luận")
+def _build_market_message(run_id: str, vnindex_context: dict[str, Any], summary: dict[str, Any]) -> str:
+    metrics = dict(vnindex_context.get("metrics") or {})
+    bullets = _take_list(vnindex_context.get("bullets"), 4)
+    sector_bullets = _take_list(vnindex_context.get("sector_bullets"), 2)
+    action_bias = _clean_text(str(vnindex_context.get("action_bias") or "").strip())
+    risk_note = _clean_text(str(vnindex_context.get("risk_note") or "").strip())
+    headline = _clean_text(str(vnindex_context.get("headline") or "VNINDEX đang trong giai đoạn theo dõi thêm.").strip())
+    execution_quality = _execution_quality_text(str(summary.get("execution_quality") or "unknown"))
 
-    if actions:
-        lines.extend(["", "6. Kế Hoạch Hành Động", actions[0]])
-    if risks:
-        lines.extend(["", "7. Rủi Ro Cần Theo Dõi", risks[0]])
-    if conclusion:
-        lines.extend(["", "8. Kết Luận", conclusion[0]])
+    lines = [
+        "[1/4] Phân tích thị trường chung - VNINDEX",
+        f"Cập nhật: {run_id}",
+        "",
+        headline,
+    ]
+
+    advancers = _to_int(metrics.get("advancers"))
+    decliners = _to_int(metrics.get("decliners"))
+    total_symbols = _to_int(metrics.get("total_symbols"))
+    positive_ratio = _to_float(metrics.get("positive_ratio"))
+    ad_ratio = _to_float(metrics.get("advance_decline_ratio"))
+    avg_return_3m = _to_float(metrics.get("avg_return_3m"))
+    liquidity_share = _to_float(metrics.get("top_n_liquidity_share"))
+
+    if total_symbols > 0:
+        lines.append(
+            f"Số liệu nhanh: {advancers}/{total_symbols} mã tăng, {decliners}/{total_symbols} mã giảm; positive ratio {_fmt_pct(positive_ratio, scale=100)}; A/D {_fmt_num(ad_ratio, 2)}."
+        )
+    if avg_return_3m is not None:
+        lines.append(f"Xung lực trung hạn của rổ theo dõi hiện ở mức {_fmt_pct(avg_return_3m, scale=100)}.")
+    if liquidity_share is not None:
+        lines.append(f"Mức độ tập trung dòng tiền vào nhóm dẫn dắt đang ở khoảng {_fmt_pct(liquidity_share, scale=100)}.")
+    lines.append(f"Chất lượng dữ liệu hiện tại: {execution_quality}.")
+
+    if bullets:
+        lines.extend(["", "Các điểm đáng chú ý:"])
+        lines.extend([f"- {_clean_text(item)}" for item in bullets])
+    if sector_bullets:
+        lines.extend(["", "Nhóm ngành:"])
+        lines.extend([f"- {_clean_text(item)}" for item in sector_bullets])
+
+    if action_bias:
+        lines.extend(["", "Hành động ưu tiên:", f"- {action_bias}"])
+    if risk_note:
+        lines.extend(["", "Rủi ro chính:", f"- {risk_note}"])
 
     return "\n".join(lines).strip()
 
 
-def _extract_section(sections: list[Any], title: str) -> list[str]:
-    for section in sections:
-        if not isinstance(section, dict):
-            continue
-        if str(section.get("title") or "").strip() != title:
-            continue
-        paragraphs = section.get("paragraphs")
-        if not isinstance(paragraphs, list):
-            return []
-        return [str(item).strip() for item in paragraphs if str(item).strip()]
-    return []
+def _build_news_message(run_id: str, news_impact: dict[str, Any]) -> str:
+    headline = _clean_text(str(news_impact.get("headline") or "Tin tức hiện chưa đủ mạnh để đảo chiều tâm lý toàn thị trường.").strip())
+    positive_items = _take_list(news_impact.get("positive_items"), 4)
+    negative_items = _take_list(news_impact.get("negative_items"), 4)
+    shock_items = _take_list(news_impact.get("shock_items"), 3)
+    symbol_notes = _take_list(news_impact.get("symbol_notes"), 3)
+    conclusion = _clean_text(str(news_impact.get("conclusion") or "Ưu tiên phản ứng giá hơn là đoán headline.").strip())
+
+    lines = [
+        "[2/4] Tin tức và yếu tố ảnh hưởng thị trường",
+        f"Cập nhật: {run_id}",
+        "",
+        headline,
+    ]
+    if positive_items:
+        lines.extend(["", "Tin tốt / catalyst:"])
+        lines.extend([f"- {_clean_text(item)}" for item in positive_items])
+    if negative_items:
+        lines.extend(["", "Tin xấu / áp lực:"])
+        lines.extend([f"- {_clean_text(item)}" for item in negative_items])
+    if shock_items:
+        lines.extend(["", "Tin sốc / cảnh báo:"])
+        lines.extend([f"- {_clean_text(item)}" for item in shock_items])
+    if symbol_notes:
+        lines.extend(["", "Liên hệ tới cổ phiếu:"])
+        lines.extend([f"- {_clean_text(item)}" for item in symbol_notes])
+    lines.extend(["", "Kết luận nhanh:", f"- {conclusion}"])
+    return "\n".join(lines).strip()
 
 
-def _render_fallback_narrative(summary: dict[str, Any]) -> str:
-    headline = str(summary.get("ai_headline") or summary.get("headline") or "Nhận Định Thị Trường").strip()
-    next_actions = summary.get("ai_action_plan") or summary.get("next_actions") or []
-    symbols = summary.get("symbols_selected", [])[:5]
-    watchlist = ", ".join(str(symbol).strip().upper() for symbol in symbols if str(symbol).strip())
-    action_text = "; ".join(str(item).strip() for item in next_actions[:2] if str(item).strip())
-    body = "Thị trường hiện được tổng hợp từ pipeline nội bộ và ưu tiên lúc này là lọc ra các cổ phiếu còn đủ điều kiện theo dõi."
-    if watchlist:
-        body += f" Nhóm cần theo sát gồm {watchlist}."
-    if action_text:
-        body += f" Hướng hành động ưu tiên là: {action_text}."
-    return "\n".join([headline, f"Cập nhật: {summary.get('run_id', '')}", "", body]).strip()
+def _build_top5_message(run_id: str, long_candidates: dict[str, Any], top_opportunities: list[dict[str, Any]]) -> str:
+    selected = [dict(item) for item in (long_candidates.get("selected") or []) if isinstance(item, dict)]
+    if not selected:
+        selected = [dict(item) for item in top_opportunities if isinstance(item, dict)]
+    headline = _clean_text(str(long_candidates.get("headline") or "Danh sách dưới đây ưu tiên các mã LONG khỏe nhất hiện tại.").strip())
+    selection_rule = _clean_text(str(long_candidates.get("selection_rule") or "Ưu tiên mã tăng giá, giữ xung lực dương và có vùng mua rõ ràng.").strip())
+
+    lines = [
+        "[3/4] Top 5 cổ phiếu LONG khỏe",
+        f"Cập nhật: {run_id}",
+        "",
+        headline,
+        f"Bộ lọc sử dụng: {selection_rule}",
+    ]
+    if not selected:
+        lines.append("Chưa có mã nào đủ chuẩn LONG khỏe; nên tiếp tục quan sát thay vì ép chọn đủ số lượng.")
+        return "\n".join(lines).strip()
+
+    for index, item in enumerate(selected[:5], start=1):
+        symbol = str(item.get("symbol") or "").strip().upper()
+        day_change = _fmt_signed_pct(_to_float(item.get("day_change_pct")))
+        period_change = _fmt_signed_pct(_to_float(item.get("period_change_pct")))
+        volume_ratio = _to_float(item.get("volume_ratio"))
+        rr = _to_float(item.get("risk_reward"))
+        reasons = [str(reason).strip() for reason in (item.get("selection_reasons") or []) if str(reason).strip()]
+        trigger = str(item.get("trigger") or "").strip()
+
+        lines.extend([
+            "",
+            f"{index}. {symbol}",
+            f"- Biến động phiên: {day_change if day_change else 'n/a'} | Chu kỳ theo dõi: {period_change if period_change else 'n/a'}",
+        ])
+        if volume_ratio is not None:
+            lines.append(f"- Khối lượng so với trung bình: {volume_ratio:.2f}x")
+        if rr is not None:
+            lines.append(f"- RR tham chiếu: {rr:.2f}")
+        if trigger:
+            lines.append(f"- Vùng theo dõi: {trigger}")
+        if reasons:
+            lines.append(f"- Lý do chọn: {'; '.join(_clean_text(reason) for reason in reasons[:3])}.")
+        note = _clean_text(str(item.get("selection_note") or "").strip())
+        if note:
+            lines.append(f"- Nhận định nhanh: {note}")
+    return "\n".join(lines).strip()
 
 
-def _plain_text_message(text: str) -> str:
-    sanitized = str(text)
-    for marker in ("`", "*", "_"):
-        sanitized = sanitized.replace(marker, "")
-    return sanitized
+def _build_entry_message(run_id: str, entry_execution: dict[str, Any], top_opportunities: list[dict[str, Any]]) -> str:
+    entries = [dict(item) for item in (entry_execution.get("entries") or []) if isinstance(item, dict)]
+    if not entries:
+        entries = _fallback_entries(top_opportunities)
+    posture = _clean_text(str(entry_execution.get("portfolio_posture") or "Giải ngân chậm và ưu tiên xác nhận.").strip())
+    global_rules = _take_list(entry_execution.get("global_rules"), 4)
+
+    lines = [
+        "[4/4] Kế hoạch vào lệnh và quản trị vị thế",
+        f"Cập nhật: {run_id}",
+        "",
+        f"Tư thế danh mục: {posture}",
+    ]
+    if global_rules:
+        lines.extend(["", "Nguyên tắc chung:"])
+        lines.extend([f"- {_clean_text(rule)}" for rule in global_rules])
+    if entries:
+        lines.extend(["", "Kế hoạch theo từng mã:"])
+        for entry in entries[:5]:
+            symbol = str(entry.get("symbol") or "").strip().upper()
+            entry_zone = _clean_text(str(entry.get("entry_zone") or "chờ vùng mua rõ hơn").strip())
+            allocation_plan = [str(item).strip() for item in (entry.get("allocation_plan") or []) if str(item).strip()]
+            stop_note = _clean_text(str(entry.get("stop_note") or "Luôn đặt điểm vô hiệu trước khi vào lệnh.").strip())
+            take_profit_note = _clean_text(str(entry.get("take_profit_note") or "Chốt lời từng phần khi giá tiến vào vùng cản.").strip())
+
+            lines.append(f"- {symbol}: vùng mua {entry_zone}.")
+            for plan in allocation_plan[:3]:
+                lines.append(f"  • {_clean_text(plan)}")
+            lines.append(f"  • {stop_note}")
+            lines.append(f"  • {take_profit_note}")
+    return "\n".join(lines).strip()
 
 
-def _chunk_message(text: str, *, max_length: int) -> list[str]:
-    normalized = str(text).strip()
-    if not normalized:
+def _fallback_entries(opportunities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for item in opportunities[:5]:
+        entries.append(
+            {
+                "symbol": item.get("symbol"),
+                "entry_zone": item.get("trigger"),
+                "allocation_plan": [
+                    "30% vị thế thăm dò khi giá chạm đúng vùng theo dõi.",
+                    "30% tiếp theo khi giá giữ được nền và thanh khoản không xấu đi.",
+                    "40% còn lại chỉ thêm khi thị trường chung thuận lợi hơn.",
+                ],
+                "stop_note": f"Dừng lại nếu {_clean_text(str(item.get('invalidation') or 'gãy cấu trúc hỗ trợ')).lower().rstrip('.')}.",
+                "take_profit_note": f"Chốt lời từng phần theo RR tham chiếu {item.get('risk_reward') or 'n/a'}.",
+            }
+        )
+    return entries
+
+
+def _clean_text(text: str) -> str:
+    cleaned = " ".join(str(text or "").replace("\r", " ").replace("\n", " ").split())
+    replacements = {
+        "risk_off": "thận trọng",
+        "risk_on": "tích cực",
+        "balanced": "cân bằng",
+        "narrow_leadership": "phân hóa hẹp",
+        "downtrend": "xu hướng giảm",
+        "uptrend": "xu hướng tăng",
+        "pullback_buy": "mua khi điều chỉnh",
+        "breakout_or_wait": "chờ xác nhận bứt phá",
+        "avoid_or_wait": "chưa ưu tiên hành động",
+        "healthy": "ổn định",
+        "degraded": "cần kiểm tra thêm",
+        "partial": "chưa hoàn chỉnh",
+        "No market-wide news detected.": "Hiện chưa có cụm tin thị trường đủ mạnh để tạo lợi thế thông tin rõ rệt.",
+    }
+    for old, new in replacements.items():
+        cleaned = cleaned.replace(old, new)
+    return cleaned.strip()
+
+
+def _take_list(value: Any, limit: int) -> list[str]:
+    if not isinstance(value, list):
         return []
-    if len(normalized) <= max_length:
-        return [normalized]
-    paragraphs = [part.strip() for part in normalized.split("\n\n") if part.strip()]
+    return [str(item).strip() for item in value if str(item).strip()][:limit]
+
+
+def _to_float(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(value: Any) -> int:
+    try:
+        if value is None:
+            return 0
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _fmt_pct(value: float | None, scale: float = 1.0) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value * scale:.2f}%"
+
+
+def _fmt_signed_pct(value: float | None) -> str:
+    if value is None:
+        return ""
+    sign = "+" if value > 0 else ""
+    return f"{sign}{value:.2f}%"
+
+
+def _fmt_num(value: float | None, digits: int = 2) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.{digits}f}"
+
+
+def _execution_quality_text(value: str) -> str:
+    mapping = {
+        "healthy": "ổn định",
+        "degraded": "cần kiểm tra thêm",
+        "partial": "chưa hoàn chỉnh",
+        "unknown": "chưa rõ",
+    }
+    key = str(value or "").strip().lower()
+    return mapping.get(key, key or "chưa rõ")
+
+
+def _plain_text_message(message: str) -> str:
+    return str(message or "").replace("\r\n", "\n").strip()
+
+
+def _chunk_message(message: str, max_length: int = MAX_TELEGRAM_TEXT_LENGTH) -> list[str]:
+    text = _plain_text_message(message)
+    if not text:
+        return []
+    if len(text) <= max_length:
+        return [text]
+
     chunks: list[str] = []
-    current = ""
-    for paragraph in paragraphs:
-        candidate = paragraph if not current else f"{current}\n\n{paragraph}"
-        if len(candidate) <= max_length:
-            current = candidate
-            continue
-        if current:
-            chunks.append(current)
-            current = ""
-        if len(paragraph) <= max_length:
-            current = paragraph
-            continue
-        lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
-        for line in lines:
-            candidate = line if not current else f"{current}\n{line}"
-            if len(candidate) <= max_length:
-                current = candidate
-                continue
-            if current:
-                chunks.append(current)
-                current = ""
-            while len(line) > max_length:
-                chunks.append(line[:max_length].rstrip())
-                line = line[max_length:].lstrip()
-            current = line
-    if current:
-        chunks.append(current)
-    return chunks
+    remaining = text
+    while remaining:
+        if len(remaining) <= max_length:
+            chunks.append(remaining)
+            break
+        split_at = remaining.rfind("\n", 0, max_length)
+        if split_at < max_length // 2:
+            split_at = remaining.rfind(" ", 0, max_length)
+        if split_at < max_length // 2:
+            split_at = max_length
+        chunks.append(remaining[:split_at].strip())
+        remaining = remaining[split_at:].strip()
+    return [chunk for chunk in chunks if chunk]

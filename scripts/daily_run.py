@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from notifiers.telegram import TelegramNotifier, build_daily_summary_message
+from notifiers.telegram import TelegramNotifier, build_daily_summary_message, build_daily_summary_messages
 from providers.factory import create_provider
 from services.ai_analysis_service import (
     ai_analysis_ready,
@@ -46,6 +46,16 @@ RANKING_TABLE_PATH = PROJECT_ROOT / "data" / "derived" / "universe_scores.csv"
 RAW_SCAN_OUTPUT_PATH = PROJECT_ROOT / "data" / "derived" / "universe_scan_raw.csv"
 DOTENV_PATH = PROJECT_ROOT / ".env"
 VALID_STOCK_SYMBOL_PATTERN = re.compile(r"^[A-Z]{3,4}$")
+PROXY_ENV_KEYS = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "ALL_PROXY",
+    "all_proxy",
+    "GIT_HTTP_PROXY",
+    "GIT_HTTPS_PROXY",
+)
 
 
 @dataclass(slots=True)
@@ -126,6 +136,7 @@ def configure_logging() -> None:
 
 def load_dotenv_if_present(path: Path = DOTENV_PATH) -> None:
     if not path.exists():
+        clear_runtime_proxies()
         return
 
     for raw_line in path.read_text(encoding="utf-8").splitlines():
@@ -140,6 +151,14 @@ def load_dotenv_if_present(path: Path = DOTENV_PATH) -> None:
 
         normalized_value = value.strip().strip('"').strip("'")
         os.environ[normalized_key] = normalized_value
+
+    clear_runtime_proxies()
+
+
+def clear_runtime_proxies() -> None:
+    for key in PROXY_ENV_KEYS:
+        if key in os.environ:
+            os.environ.pop(key, None)
 
 
 def _log_step_start(name: str) -> None:
@@ -1217,7 +1236,14 @@ def build_final_summary(runtime_bundle: RuntimeConfigBundle, context: RunContext
         "run_id": context.run_id,
         "headline": context.daily_briefing_payload.get("headline"),
         "chief_analysis": dict(context.daily_briefing_payload.get("chief_analysis", {})),
+        "market_synthesis": dict(context.daily_briefing_payload.get("market_synthesis", {})),
         "selection_mode": context.selection_mode,
+        "market_view": dict(context.daily_briefing_payload.get("market_view", {})),
+        "vnindex_context": dict(context.daily_briefing_payload.get("vnindex_context", {})),
+        "news_impact": dict(context.daily_briefing_payload.get("news_impact", {})),
+        "long_candidates": dict(context.daily_briefing_payload.get("long_candidates", {})),
+        "entry_execution": dict(context.daily_briefing_payload.get("entry_execution", {})),
+        "top_opportunities": list(context.daily_briefing_payload.get("top_opportunities", [])),
         "symbols_selected": list(context.symbols_selected),
         "total": total_candidates,
         "success": sum(1 for item in context.symbol_results if item.status == "success"),
@@ -1293,9 +1319,11 @@ def send_notification(runtime_bundle: RuntimeConfigBundle, context: RunContext) 
             chat_id=str(telegram_config.get("chat_id", "")).strip(),
             enabled=bool(telegram_config.get("enabled", False)),
         )
-        message = build_daily_summary_message(payload)
+        messages = build_daily_summary_messages(payload)
+        if not messages:
+            messages = [build_daily_summary_message(payload)]
 
-        if notifier.send_message(message):
+        if notifier.send_messages(messages):
             logging.info("Telegram notification sent successfully.")
         else:
             _warn_step(context, "send_notification", "telegram notification failed.")

@@ -2,89 +2,60 @@
 
 Agent hỗ trợ quét, phân tích và xuất báo cáo cổ phiếu theo batch hằng ngày.
 
-## 1. Tạo môi trường
+## Tạo môi trường
 
 ### Windows PowerShell
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-Git Bash:
+### Git Bash
 
 ```bash
 python -m venv .venv
 source .venv/Scripts/activate
-```
-
-## Cai dependencies
-
-```bash
 pip install -r requirements.txt
 ```
 
-## Cau hinh `config/`
+## Cấu hình `config/`
 
-Cap nhat cac file sau truoc khi chay batch:
+Cập nhật các file sau trước khi chạy:
 
-- `config/watchlist.yaml`
-  - khai bao danh sach `symbols` can theo doi
-- `config/runtime.yaml`
-  - khai bao `mode`, `selection`, `output`, `notification`
-- `config/sources.yaml`
-  - khai bao provider uu tien va provider fallback
+- `config/watchlist.yaml`: danh sách `symbols` cần theo dõi
+- `config/runtime.yaml`: `mode`, `selection`, `output`, `notification`
+- `config/sources.yaml`: provider ưu tiên và thứ tự fallback
 
-## Chay daily batch
+## Chạy daily batch
 
 ```bash
 python scripts/daily_run.py
 ```
 
-Script se:
+Pipeline sẽ:
 
-1. Doc watchlist va runtime config
-2. Tai market overview / ranking neu co
-3. Tao provider theo config
-4. Build `AnalysisPackage` cho tung symbol
-5. Render trade plan va deep dive
-6. Tong hop `daily_briefing`, `market_synthesis`, `chief_analysis`
+1. Đọc watchlist và runtime config
+2. Tải market overview hoặc ranking nếu có
+3. Tạo provider theo config
+4. Build `AnalysisPackage` cho từng symbol
+5. Render trade plan và deep dive
+6. Tổng hợp `daily_briefing`, `market_synthesis`, `chief_analysis`
 7. Export report bundle Markdown/HTML
 8. Ghi manifest JSON cho run
-9. In runtime summary cuoi job
-10. Thu gui Telegram summary neu duoc bat trong config
+9. In runtime summary cuối job
+10. Thử gửi Telegram summary nếu được bật
 
-## Chay Trading Terminal day du
+## Chạy Trading Terminal đầy đủ
 
-Lenh nay la entry point de phat huy toi da bo skill/pipeline hien co:
+Entry point khuyến nghị:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/run_trading_terminal.py
 ```
 
-Mac dinh script se:
-
-1. load `.env`
-2. chay `universe_scan`
-3. build `market_overview`
-4. chay `daily_run`
-5. tong hop narrative voi `market_synthesis` + `chief_analysis`
-6. export `daily_briefing` va `market_analysis_report`
-
-Neu muon bat AI bang OpenAI API:
-
-```powershell
-$env:OPENAI_API_KEY="your_openai_api_key"
-$env:AI_ANALYSIS_ENABLED="true"
-.\.venv\Scripts\python.exe scripts/run_trading_terminal.py --ai-mode api --openai-model gpt-4.1-mini
-```
-
-Neu muon dung file bridge:
-
-```powershell
-.\.venv\Scripts\python.exe scripts/run_trading_terminal.py --ai-mode file
-```
-
-Neu muon dung local LLM qua Ollama, khong can API cloud:
+Mặc định repo nên chạy theo local-first. Ví dụ với Ollama:
 
 ```powershell
 ollama serve
@@ -92,20 +63,51 @@ ollama pull qwen2.5:14b
 .\.venv\Scripts\python.exe scripts/run_trading_terminal.py --ai-mode local --openai-model qwen2.5:14b
 ```
 
-Mac dinh local mode se dung:
+Nếu muốn dùng file bridge:
 
-- `LOCAL_LLM_BASE_URL` hoac `OLLAMA_BASE_URL` hoac `OPENAI_BASE_URL`
-- fallback cuoi cung: `http://localhost:11434/v1`
-- `LOCAL_LLM_MODEL` hoac `OLLAMA_MODEL` hoac `OPENAI_MODEL`
-- fallback cuoi cung: `qwen2.5:14b`
+```powershell
+.\.venv\Scripts\python.exe scripts/run_trading_terminal.py --ai-mode file
+```
 
-Mot so tuy chon:
+Nếu thật sự cần cloud API:
 
-- `--skip-scan`: bo qua universe scan, dung lai du lieu da co
-- `--skip-overview`: bo qua rebuild market overview
-- `--config-dir <path>`: doi thu muc config
+```powershell
+$env:OPENAI_API_KEY="your_openai_api_key"
+$env:AI_ANALYSIS_ENABLED="true"
+.\.venv\Scripts\python.exe scripts/run_trading_terminal.py --ai-mode api --openai-model gpt-4.1-mini
+```
 
-## Bat Telegram notification
+Local mode sẽ ưu tiên:
+
+- `LOCAL_LLM_BASE_URL` hoặc `OLLAMA_BASE_URL` hoặc `OPENAI_BASE_URL`
+- fallback cuối cùng: `http://localhost:11434/v1`
+- `LOCAL_LLM_MODEL` hoặc `OLLAMA_MODEL` hoặc `OPENAI_MODEL`
+- fallback cuối cùng: `qwen2.5:14b`
+
+Một số tùy chọn:
+
+- `--skip-scan`: bỏ qua universe scan, dùng lại dữ liệu cũ
+- `--skip-overview`: bỏ qua rebuild market overview
+- `--config-dir <path>`: đổi thư mục config
+
+## Mô hình skill hiện tại
+
+Pipeline đang đi theo hướng một agent chính, nhiều skill-stage tái sử dụng:
+
+- lấy data và chuẩn hóa provider
+- news context
+- macro context
+- stock scanner
+- technical profiler
+- chart pattern lab
+- order engine
+- risk engine
+- portfolio auditor
+- chief analysis và report export
+
+Mục tiêu là mỗi skill chỉ làm một việc rõ ràng, trả về payload dùng lại được, và diễn giải bằng tiếng Việt dễ hiểu.
+
+## Telegram notification
 
 Trong `config/runtime.yaml`:
 
@@ -114,16 +116,16 @@ notification:
   telegram: true
 ```
 
-Tao file `.env` tu `.env.example` hoac set env trong shell:
+Set env:
 
 ```powershell
 $env:TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
 $env:TELEGRAM_CHAT_ID="your_telegram_chat_id"
 ```
 
-## Chay AI phan tich bang file bridge de dung Codex tam thoi
+## File bridge cho AI
 
-Neu chua muon goi API, co the bat che do file bridge:
+Nếu chưa muốn gọi API hoặc local server, có thể dùng file bridge:
 
 ```powershell
 $env:AI_ANALYSIS_ENABLED="true"
@@ -133,47 +135,27 @@ $env:AI_ANALYSIS_RESPONSE_FILE="artifacts/ai_response.json"
 $env:OPENAI_MODEL="codex-local-bridge"
 ```
 
-Khi chay `python scripts/daily_run.py`, pipeline se:
+Khi chạy `python scripts/daily_run.py`, pipeline sẽ:
 
-1. ghi prompt AI vao `artifacts/ai_prompt.json`
-2. doc ket qua JSON tu `artifacts/ai_response.json`
+1. Ghi prompt AI vào `artifacts/ai_prompt.json`
+2. Đọc kết quả JSON từ `artifacts/ai_response.json`
 
-Luot dung tam voi Codex:
-
-1. chay pipeline sau khi da tao `artifacts/ai_response.json`
-2. hoac mo `artifacts/ai_prompt.json`, bao Codex viet dung JSON schema vao `artifacts/ai_response.json`, roi chay lai pipeline
-
-Che do nay la semi-manual bridge, khong phai local API server.
-
-Neu `notification.telegram = true` nhung thieu env, job van tiep tuc va chi ghi warning.
-
-Neu request Telegram loi, job van khong crash.
-
-## Doc `reports/` va manifest
+## Output chính
 
 Trong `reports/`:
 
-- `trade_plan_<symbol>.md`: ban Markdown de review nhanh
+- `trade_plan_<symbol>.md`
 
-Trong thu muc manifest da cau hinh:
-
-- `manifest_<symbol>_<run_id>.json`: log van hanh cho tung symbol
-- file nay chua `files_created`, `warnings`, `errors`, `duration_seconds`, `data_quality_summary`
-
-Trong `artifacts/<run_id>/` co them cac file tong hop:
+Trong `artifacts/<run_id>/`:
 
 - `daily_briefing.md`
 - `market_analysis_report.md`
 - `run_summary.md`
-- ban HTML tuong ung cho tung file
+- các file HTML tương ứng
 
 ## Troubleshooting
 
-- `ModuleNotFoundError`
-  - kiem tra da activate `.venv` va da `pip install -r requirements.txt`
-- `vnstock` tra du lieu thieu
-  - report van co the tao o che do degraded; kiem tra `missing_sections` trong report hoac manifest
-- `paid` provider loi
-  - chuyen `mode` sang `free` hoac dung provider fallback
-- Telegram khong gui duoc
-  - kiem tra `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `notification.telegram`
+- `ModuleNotFoundError`: kiểm tra đã activate `.venv` và cài `requirements.txt`
+- dữ liệu Vnstock thiếu: pipeline vẫn có thể chạy degraded, xem `missing_sections` trong report hoặc manifest
+- provider lỗi: chuyển `mode` sang `free` hoặc dùng fallback
+- Telegram không gửi được: kiểm tra `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `notification.telegram`

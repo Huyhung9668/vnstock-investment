@@ -77,3 +77,21 @@ def test_local_mode_is_ready_without_cloud_api_key(monkeypatch) -> None:
     assert config.base_url == "http://localhost:11434/v1"
     assert config.model == "qwen2.5:14b"
     assert ai_analysis_ready(config) is True
+
+
+def test_default_ai_mode_prefers_local_when_not_overridden(monkeypatch) -> None:
+    monkeypatch.setenv("AI_ANALYSIS_ENABLED", "true")
+    monkeypatch.delenv("AI_ANALYSIS_MODE", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("LOCAL_LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("LOCAL_LLM_MODEL", raising=False)
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+
+    config = load_ai_analysis_config()
+
+    assert config.mode == "local"
+    assert config.base_url == "http://localhost:11434/v1"
+    assert config.model == "qwen2.5:14b"

@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -16,6 +17,27 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
+
+
+PROXY_ENV_KEYS = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "ALL_PROXY",
+    "all_proxy",
+    "GIT_HTTP_PROXY",
+    "GIT_HTTPS_PROXY",
+)
+
+
+def _clear_runtime_proxies() -> None:
+    for key in PROXY_ENV_KEYS:
+        if key in os.environ:
+            os.environ.pop(key, None)
+
+
+_clear_runtime_proxies()
 
 import daily_run
 from scripts import universe_scan
@@ -188,7 +210,9 @@ def main() -> int:
     if len(symbols) < args.top_n:
         raise ValueError(f"Need at least {args.top_n} symbols, got {len(symbols)}")
 
+    _clear_runtime_proxies()
     daily_run.load_dotenv_if_present()
+    _clear_runtime_proxies()
     scanned_df = _scan_watchlist(symbols)
     top_symbols = _write_rank_outputs(scanned_df, top_n=args.top_n)
 

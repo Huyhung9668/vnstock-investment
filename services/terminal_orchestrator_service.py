@@ -46,7 +46,7 @@ def build_terminal_orchestration(
         _stage("deep_dive", bool(normalized_symbols), "Phan tich chi tiet theo symbol"),
         _stage("trade_plan", bool(normalized_trade_plans), "Trade plan va action levels"),
         _stage("opportunity_selection", bool(normalized_top_opportunities), "Chon top opportunities"),
-        _stage("ai_overlay", bool(normalized_ai), "AI overlay cho narrative"),
+        _stage("ai_overlay", bool(normalized_ai), "Local/file/cloud AI overlay cho narrative"),
     ]
 
     completed = sum(1 for stage in stages if stage["enabled"])

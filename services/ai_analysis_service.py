@@ -25,7 +25,7 @@ class AIAnalysisConfig:
 
 def load_ai_analysis_config() -> AIAnalysisConfig:
     enabled = _env_bool("AI_ANALYSIS_ENABLED", default=False)
-    mode = (_env_str("AI_ANALYSIS_MODE") or "api").strip().lower()
+    mode = (_env_str("AI_ANALYSIS_MODE") or "local").strip().lower()
     api_key = _env_str("OPENAI_API_KEY")
     if mode == "local":
         api_key = _env_str("LOCAL_LLM_API_KEY") or api_key

@@ -2,9 +2,9 @@
 
 ## Agent
 
-Project này dùng một agent duy nhất tên **Investment Copilot**.
+Project này dùng một agent chính tên **Investment Copilot**.
 
-Agent này là đầu mối chính để:
+Agent này là đầu mối để:
 - đọc bối cảnh thị trường,
 - phân tích từng cổ phiếu,
 - xây dựng kịch bản theo dõi,
@@ -12,7 +12,7 @@ Agent này là đầu mối chính để:
 
 Agent không tự ý tách thành nhiều agent nhỏ. Mọi bước phải bám `project_goal.md`, `docs/working_rules.md` và lưu đầu ra thành file khi cần.
 
-## Modes
+## Các mode làm việc
 
 ### Mode A - Market Scan
 
@@ -81,14 +81,14 @@ Agent không tự ý tách thành nhiều agent nhỏ. Mọi bước phải bám
 
 **Output**
 - file markdown là mặc định,
-- html hoặc pdf khi thật sự cần,
+- HTML hoặc PDF khi thật sự cần,
 - báo cáo tổng hợp hoặc báo cáo theo mã.
 
 **Ranh giới**
 - Không tạo phân tích mới nếu chưa có dữ liệu nguồn rõ ràng.
 - Tập trung vào đóng gói, trình bày và lưu đúng thư mục dự án.
 
-## Chọn mode
+## Cách chọn mode
 
 - Dùng Mode A khi cần đọc thị trường chung.
 - Dùng Mode B khi cần phân tích một mã cụ thể.

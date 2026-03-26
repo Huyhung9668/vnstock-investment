@@ -7,15 +7,21 @@ from typing import Any
 import pandas as pd
 
 from services.execution_context_service import build_execution_context
+from services.chart_pattern_lab_service import build_chart_pattern_lab
 from services.flow_of_funds_service import build_flow_of_funds
 from services.fundamental_profiler_service import build_fundamental_profiles
 from services.futures_radar_service import build_futures_radar
+from services.entry_execution_service import build_entry_execution_plan
+from services.long_candidate_service import build_long_candidates
 from services.macro_context_service import build_macro_context
 from services.news_context_service import build_news_context
+from services.news_impact_service import build_news_impact
+from services.order_engine_service import build_order_engine
 from services.portfolio_auditor_service import build_portfolio_audit
 from services.risk_engine_service import build_risk_engine
 from services.stock_scanner_service import build_stock_scanner_summary
 from services.technical_profiler_service import build_technical_profiles
+from services.vnindex_context_service import build_vnindex_context
 
 
 DictStrAny = dict[str, Any]
@@ -40,9 +46,17 @@ def build_skill_pipeline_payload(
         market_news_summary=market_news_summary,
         warnings=warnings,
     )
+    vnindex_context = build_vnindex_context(
+        market_overview=market_overview,
+    )
     news_context = build_news_context(
         market_news_summary=market_news_summary,
         symbol_payloads=symbol_payloads,
+    )
+    news_impact = build_news_impact(
+        market_news_summary=market_news_summary,
+        symbol_payloads=symbol_payloads,
+        warnings=warnings,
     )
     futures_radar = build_futures_radar(
         market_overview=market_overview,
@@ -53,6 +67,16 @@ def build_skill_pipeline_payload(
         ranking_rows=ranking_rows,
     )
     technical_profiles = build_technical_profiles(
+        trade_plan_payloads=trade_plan_payloads,
+    )
+    long_candidates = build_long_candidates(
+        ranking_table=ranking_table,
+        symbol_payloads=symbol_payloads,
+        trade_plan_payloads=trade_plan_payloads,
+        top_n=5,
+    )
+    chart_pattern_lab = build_chart_pattern_lab(
+        symbol_payloads=symbol_payloads,
         trade_plan_payloads=trade_plan_payloads,
     )
     fundamental_profiles = build_fundamental_profiles(
@@ -66,6 +90,13 @@ def build_skill_pipeline_payload(
         top_opportunities=top_opportunities,
         risk_engine_payload=risk_engine,
     )
+    order_engine = build_order_engine(
+        trade_plan_payloads=trade_plan_payloads,
+        risk_engine_payload=risk_engine,
+    )
+    entry_execution = build_entry_execution_plan(
+        selected_candidates=list(long_candidates.get("selected") or []),
+    )
     execution_context = build_execution_context(
         trade_plan_payloads=trade_plan_payloads,
         risk_engine_payload=risk_engine,
@@ -74,14 +105,20 @@ def build_skill_pipeline_payload(
 
     stages = {
         "macro_context": macro_context,
+        "vnindex_context": vnindex_context,
         "news_context": news_context,
+        "news_impact": news_impact,
         "futures_radar": futures_radar,
         "flow_of_funds": flow_of_funds,
         "stock_scanner": scanner,
+        "long_candidate_selector": long_candidates,
         "technical_profiler": technical_profiles,
+        "chart_pattern_lab": chart_pattern_lab,
         "fundamental_profiler": fundamental_profiles,
         "risk_engine": risk_engine,
         "portfolio_auditor": portfolio_audit,
+        "order_engine": order_engine,
+        "entry_execution": entry_execution,
         "execution_context": execution_context,
     }
 
