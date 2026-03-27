@@ -5,12 +5,15 @@ from typing import Any
 
 import pandas as pd
 
+from services.analysis_critic_service import critique_analysis
 from services.chief_analysis_writer_service import build_chief_analysis
 from services.entry_execution_service import build_entry_execution_plan
 from services.long_candidate_service import build_long_candidates
+from services.market_brain_service import build_market_brain
 from services.market_synthesis_service import build_market_synthesis
 from services.news_impact_service import build_news_impact
 from services.skill_pipeline_service import build_skill_pipeline_payload
+from services.telegram_native_writer_service import build_telegram_native_brief
 from services.terminal_orchestrator_service import build_terminal_orchestration
 from services.vnindex_context_service import build_vnindex_context
 
@@ -61,9 +64,9 @@ def build_daily_briefing(
         top_n=5,
     )
     selected_longs = list(long_candidates.get("selected") or [])
-    if selected_longs:
-        top_opportunities = selected_longs
-    entry_execution = build_entry_execution_plan(selected_candidates=top_opportunities)
+    watchlist_only = list(long_candidates.get("watchlist_only") or [])
+    top_opportunities = selected_longs
+    entry_execution = build_entry_execution_plan(selected_candidates=selected_longs)
     next_actions = _build_next_actions(
         execution_status=execution_status,
         top_opportunities=top_opportunities,
@@ -94,6 +97,22 @@ def build_daily_briefing(
         generated_at=run_id,
         skill_pipeline=skill_pipeline,
     )
+    market_brain = build_market_brain(
+        market_synthesis=market_synthesis,
+        chief_analysis=chief_analysis,
+        long_candidates=long_candidates,
+    )
+    analysis_critic = critique_analysis(
+        chief_analysis=chief_analysis,
+    )
+    telegram_native_brief = build_telegram_native_brief(
+        run_id=run_id,
+        chief_analysis=chief_analysis,
+        market_brain=market_brain,
+        analysis_critic=analysis_critic,
+        long_candidates=long_candidates,
+        entry_execution=entry_execution,
+    )
     terminal_orchestration = build_terminal_orchestration(
         market_overview=normalized_market,
         ranking_available=not normalized_ranking.empty,
@@ -115,11 +134,15 @@ def build_daily_briefing(
         "long_candidates": long_candidates,
         "entry_execution": entry_execution,
         "top_opportunities": top_opportunities,
+        "watchlist_candidates": watchlist_only,
         "next_actions": next_actions,
         "warnings": normalized_warnings[:10],
         "skill_pipeline": skill_pipeline,
         "market_synthesis": market_synthesis,
         "chief_analysis": chief_analysis,
+        "market_brain": market_brain,
+        "analysis_critic": analysis_critic,
+        "telegram_native_brief": telegram_native_brief,
         "terminal_orchestration": terminal_orchestration,
     }
 

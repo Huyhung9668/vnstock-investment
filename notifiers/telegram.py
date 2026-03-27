@@ -59,19 +59,77 @@ def build_daily_summary_message(summary: dict[str, Any]) -> str:
 
 
 def build_daily_summary_messages(summary: dict[str, Any]) -> list[str]:
+    telegram_native_brief = dict(summary.get("telegram_native_brief") or {})
+    native_messages = telegram_native_brief.get("messages")
+    if isinstance(native_messages, list) and native_messages:
+        return [str(item).strip() for item in native_messages if str(item).strip()]
+
+    chief_analysis = dict(summary.get("chief_analysis") or {})
+    if chief_analysis:
+        return _build_chief_analysis_messages(summary, chief_analysis)
+
     run_id = str(summary.get("run_id") or "").strip()
     vnindex_context = dict(summary.get("vnindex_context") or {})
     news_impact = dict(summary.get("news_impact") or {})
     long_candidates = dict(summary.get("long_candidates") or {})
     entry_execution = dict(summary.get("entry_execution") or {})
     top_opportunities = [dict(item) for item in (summary.get("top_opportunities") or []) if isinstance(item, dict)]
+    watchlist_candidates = [dict(item) for item in (summary.get("watchlist_candidates") or []) if isinstance(item, dict)]
 
     messages = [
         _build_market_message(run_id, vnindex_context, summary),
         _build_news_message(run_id, news_impact),
-        _build_top5_message(run_id, long_candidates, top_opportunities),
-        _build_entry_message(run_id, entry_execution, top_opportunities),
+        _build_top5_message(run_id, long_candidates, top_opportunities, watchlist_candidates),
+        _build_entry_message(run_id, entry_execution, top_opportunities, watchlist_candidates),
     ]
+    return [message for message in messages if message.strip()]
+
+
+def _build_chief_analysis_messages(summary: dict[str, Any], chief_analysis: dict[str, Any]) -> list[str]:
+    title = _clean_text(str(chief_analysis.get("title") or "Nhận định thị trường").strip())
+    update_line = _clean_text(str(chief_analysis.get("update_line") or f"Cập nhật: {summary.get('run_id')}").strip())
+    overview = _clean_text(str(chief_analysis.get("summary") or summary.get("headline") or "").strip())
+    stance = _clean_text(str(chief_analysis.get("stance") or "").strip())
+    confidence = _clean_text(str(chief_analysis.get("confidence") or "").strip())
+    sections = [dict(item) for item in (chief_analysis.get("sections") or []) if isinstance(item, dict)]
+    total = len(sections) + 1
+
+    header_lines = [
+        f"[1/{total}] {title}",
+        update_line,
+    ]
+    if overview:
+        header_lines.extend(["", overview])
+    if stance or confidence:
+        header_lines.extend([
+            "",
+            f"Bias: {stance or 'trung tính'} | Độ tin cậy: {confidence or 'chưa rõ'}",
+        ])
+
+    messages = ["\n".join(line for line in header_lines if line).strip()]
+    for index, section in enumerate(sections, start=2):
+        title_line = _clean_text(str(section.get("title") or f"Mục {index - 1}").strip())
+        paragraphs = [
+            _clean_text(str(item).strip())
+            for item in (section.get("paragraphs") or [])
+            if str(item).strip()
+        ]
+        bullets = [
+            _clean_text(str(item).strip())
+            for item in (section.get("bullets") or [])
+            if str(item).strip()
+        ]
+
+        lines = [f"[{index}/{total}] {title_line}"]
+        if paragraphs:
+            lines.append("")
+            lines.extend(paragraphs)
+        if bullets:
+            lines.append("")
+            lines.append("Các ý chính:")
+            lines.extend([f"- {item}" for item in bullets])
+        messages.append("\n".join(lines).strip())
+
     return [message for message in messages if message.strip()]
 
 
@@ -154,7 +212,7 @@ def _build_news_message(run_id: str, news_impact: dict[str, Any]) -> str:
     return "\n".join(lines).strip()
 
 
-def _build_top5_message(run_id: str, long_candidates: dict[str, Any], top_opportunities: list[dict[str, Any]]) -> str:
+def _build_top5_message(run_id: str, long_candidates: dict[str, Any], top_opportunities: list[dict[str, Any]], watchlist_candidates: list[dict[str, Any]]) -> str:
     selected = [dict(item) for item in (long_candidates.get("selected") or []) if isinstance(item, dict)]
     if not selected:
         selected = [dict(item) for item in top_opportunities if isinstance(item, dict)]
@@ -169,7 +227,20 @@ def _build_top5_message(run_id: str, long_candidates: dict[str, Any], top_opport
         f"Bộ lọc sử dụng: {selection_rule}",
     ]
     if not selected:
-        lines.append("Chưa có mã nào đủ chuẩn LONG khỏe; nên tiếp tục quan sát thay vì ép chọn đủ số lượng.")
+        lines.append("Hiện chưa có mã nào đủ chuẩn LONG khỏe để đưa vào kế hoạch mua mới.")
+        if watchlist_candidates:
+            lines.extend(["", "Các mã chỉ nên để ở trạng thái theo dõi:"])
+            for index, item in enumerate(watchlist_candidates[:3], start=1):
+                symbol = str(item.get("symbol") or "").strip().upper()
+                trigger = str(item.get("trigger") or "").strip()
+                rr = _to_float(item.get("risk_reward"))
+                lines.append(f"{index}. {symbol}")
+                if trigger:
+                    lines.append(f"- Vùng theo dõi: {trigger}")
+                if rr is not None:
+                    lines.append(f"- RR tham chiếu: {rr:.2f}")
+                note = _clean_text(str(item.get("selection_note") or "Chưa đủ xác nhận để nâng thành ý tưởng LONG.").strip())
+                lines.append(f"- Trạng thái: {note}")
         return "\n".join(lines).strip()
 
     for index, item in enumerate(selected[:5], start=1):
@@ -200,7 +271,7 @@ def _build_top5_message(run_id: str, long_candidates: dict[str, Any], top_opport
     return "\n".join(lines).strip()
 
 
-def _build_entry_message(run_id: str, entry_execution: dict[str, Any], top_opportunities: list[dict[str, Any]]) -> str:
+def _build_entry_message(run_id: str, entry_execution: dict[str, Any], top_opportunities: list[dict[str, Any]], watchlist_candidates: list[dict[str, Any]]) -> str:
     entries = [dict(item) for item in (entry_execution.get("entries") or []) if isinstance(item, dict)]
     if not entries:
         entries = _fallback_entries(top_opportunities)
@@ -230,6 +301,13 @@ def _build_entry_message(run_id: str, entry_execution: dict[str, Any], top_oppor
                 lines.append(f"  • {_clean_text(plan)}")
             lines.append(f"  • {stop_note}")
             lines.append(f"  • {take_profit_note}")
+    else:
+        lines.extend([
+            "",
+            "Hiện chưa có kế hoạch vào lệnh mới vì chưa có mã đạt chuẩn LONG_READY.",
+        ])
+        if watchlist_candidates:
+            lines.append("Tạm thời chỉ giữ watchlist và chờ giá xác nhận tốt hơn trước khi giải ngân.")
     return "\n".join(lines).strip()
 
 

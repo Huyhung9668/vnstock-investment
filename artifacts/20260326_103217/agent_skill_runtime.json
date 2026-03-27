@@ -1,0 +1,131 @@
+{
+  "planner": {
+    "objective": "Phân tích VNINDEX, tin tức, top 5 LONG và kế hoạch entry, gửi Telegram",
+    "requested_capabilities": {
+      "market": true,
+      "news": true,
+      "long": true,
+      "entry": true,
+      "telegram": true,
+      "report": true
+    },
+    "steps": [
+      "env_setup",
+      "source_health",
+      "market_overview",
+      "ranking_selection",
+      "deep_dive",
+      "trade_plan",
+      "daily_briefing",
+      "vnindex_context",
+      "news_impact",
+      "long_candidate_selector",
+      "entry_execution",
+      "quality_gates",
+      "export_reports",
+      "write_manifest",
+      "telegram_market_brief"
+    ],
+    "summary": "Agent planner chọn 15 bước cho mục tiêu hiện tại; trọng tâm = market, news, long, entry, telegram, report."
+  },
+  "execution": {
+    "objective": "Phân tích VNINDEX, tin tức, top 5 LONG và kế hoạch entry, gửi Telegram",
+    "plan_steps": [
+      "env_setup",
+      "source_health",
+      "market_overview",
+      "ranking_selection",
+      "deep_dive",
+      "trade_plan",
+      "daily_briefing",
+      "vnindex_context",
+      "news_impact",
+      "long_candidate_selector",
+      "entry_execution",
+      "quality_gates",
+      "export_reports",
+      "write_manifest",
+      "telegram_market_brief"
+    ],
+    "executed": [
+      {
+        "skill_id": "env_setup",
+        "status": "ready",
+        "summary": "Initialized runtime for selection_mode=watchlist, run_id=20260326_103217."
+      },
+      {
+        "skill_id": "source_health",
+        "status": "ready",
+        "summary": "Quan ly danh muc nguon du lieu va quy tac uu tien/fallback cho he vnstock. Use when can khai bao source market, news, financials, reliability, freshness, fallback order, hoac can giai thich vi sao mot output dung nguon nay thay vi nguon khac."
+      },
+      {
+        "skill_id": "market_overview",
+        "status": "ready",
+        "summary": "Độ rộng thị trường yếu, bên giảm giá chiếm ưu thế và dòng tiền phòng thủ hơn."
+      },
+      {
+        "skill_id": "ranking_selection",
+        "status": "ready",
+        "summary": "Selected 5 symbols: ACB, ABS, ACC, ANV, AGG."
+      },
+      {
+        "skill_id": "deep_dive",
+        "status": "ready",
+        "summary": "Deep dives built for 5 symbols."
+      },
+      {
+        "skill_id": "trade_plan",
+        "status": "ready",
+        "summary": "Trade plans built for 5 symbols."
+      },
+      {
+        "skill_id": "daily_briefing",
+        "status": "ready",
+        "summary": "Thị trường risk_off; ưu tiên chiến lược LONG có chọn lọc, theo dõi sát watchlist."
+      },
+      {
+        "skill_id": "vnindex_context",
+        "status": "ready",
+        "summary": "VNINDEX đang ở nhịp phòng thủ; bên bán vẫn chiếm ưu thế và dòng tiền chưa mở rộng đủ mạnh."
+      },
+      {
+        "skill_id": "news_impact",
+        "status": "ready",
+        "summary": "Hiện chưa có cụm tin tức đủ mạnh để đảo chiều tâm lý toàn thị trường; biến động giá vẫn là tín hiệu quan trọng hơn."
+      },
+      {
+        "skill_id": "long_candidate_selector",
+        "status": "ready",
+        "summary": "Hiện chưa có mã nào đạt chuẩn LONG khỏe; ưu tiên đứng ngoài và chờ tín hiệu mạnh hơn."
+      },
+      {
+        "skill_id": "entry_execution",
+        "status": "ready",
+        "summary": "Giải ngân chậm, ưu tiên xác nhận rồi mới gia tăng."
+      },
+      {
+        "skill_id": "quality_gates",
+        "status": "partial",
+        "summary": "Quality gates chua dat day du: top_opportunities_ready"
+      },
+      {
+        "skill_id": "export_reports",
+        "status": "ready",
+        "summary": "Reports exported to artifacts\\20260326_103217."
+      },
+      {
+        "skill_id": "write_manifest",
+        "status": "ready",
+        "summary": "Manifest written to artifacts\\20260326_103217\\manifest.json."
+      },
+      {
+        "skill_id": "telegram_market_brief",
+        "status": "ready",
+        "summary": "Telegram 4-part market brief sent."
+      }
+    ],
+    "final_summary": "Agent runtime completed 14/15 steps. Headline: Thị trường risk_off; ưu tiên chiến lược LONG có chọn lọc, theo dõi sát watchlist.",
+    "artifacts_output_dir": "artifacts\\20260326_103217",
+    "manifest_path": "artifacts\\20260326_103217\\manifest.json"
+  }
+}

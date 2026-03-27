@@ -21,8 +21,16 @@ def build_chief_analysis(
     effective_generated_at = generated_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     macro_brief = _brief_from_stage(stages, "macro_context")
+    intermarket_brief = _brief_from_stage(stages, "global_domestic_macro_lens")
     news_brief = _brief_from_stage(stages, "news_context")
+    news_pressure_brief = _brief_from_stage(stages, "news_pressure_gauge")
     flow_brief = _brief_from_stage(stages, "flow_of_funds")
+    derivatives_brief = _brief_from_stage(stages, "vnindex_vn30_derivatives_state")
+    foreign_flow_brief = _brief_from_stage(stages, "foreign_flow_decoder")
+    sector_strength_brief = _brief_from_stage(stages, "sector_strength_map")
+    deep_technical_brief = _brief_from_stage(stages, "deep_technical_lab")
+    internals_brief = _brief_from_stage(stages, "market_internals_liquidity")
+    scenario_brief = _brief_from_stage(stages, "scenario_engine")
     scanner_brief = _brief_from_stage(stages, "stock_scanner")
     technical_brief = _brief_from_stage(stages, "technical_profiler")
     risk_brief = _brief_from_stage(stages, "risk_engine")
@@ -35,10 +43,15 @@ def build_chief_analysis(
 
     sections = [
         {"title": "Tóm Tắt Điều Hành", "paragraphs": _executive_paragraphs(normalized_synthesis, focus_rows, portfolio_brief)},
-        {"title": "Bối Cảnh Vĩ Mô & Tâm Lý", "paragraphs": _brief_section(macro_brief, fallback="Chưa có thêm lớp bối cảnh vĩ mô đủ mạnh ngoài tín hiệu thị trường chung.")},
-        {"title": "Tin Tức & Catalyst", "paragraphs": _brief_section(news_brief, fallback="Hiện chưa có lớp tin tức đủ nổi bật để tạo lợi thế diễn giải riêng cho nhóm mã theo dõi.")},
-        {"title": "Cấu Trúc Thị Trường & Dòng Tiền", "paragraphs": _merge_section_paragraphs(_brief_section(flow_brief), _market_structure_paragraphs(normalized_synthesis))},
-        {"title": "5 Mã Cần Theo Dõi", "paragraphs": _focus_paragraphs(focus_rows, scanner_brief, technical_brief), "bullets": _focus_bullets(focus_rows)},
+        {"title": "Vĩ Mô Thế Giới & Trong Nước", "paragraphs": _merge_section_paragraphs(_brief_section(intermarket_brief), _brief_section(macro_brief, fallback="Chưa có thêm lớp bối cảnh vĩ mô đủ mạnh ngoài tín hiệu thị trường chung."))},
+        {"title": "VNIndex, VN30 & Phái Sinh", "paragraphs": _merge_section_paragraphs(_brief_section(derivatives_brief), _market_structure_paragraphs(normalized_synthesis))},
+        {"title": "Đọc Vị Khối Ngoại", "paragraphs": _brief_section(foreign_flow_brief, fallback="Chưa có đủ dữ liệu trực tiếp để đọc vị khối ngoại sâu hơn ngoài dấu vết thanh khoản và mức tập trung dòng tiền.")},
+        {"title": "Sức Mạnh Ngành", "paragraphs": _brief_section(sector_strength_brief, fallback="Bản đồ sức mạnh ngành hiện chưa đủ rõ để xác nhận một cụm dẫn sóng bền vững.")},
+        {"title": "Tin Tức & Áp Lực Truyền Thông", "paragraphs": _merge_section_paragraphs(_brief_section(news_pressure_brief), _brief_section(news_brief, fallback="Hiện chưa có lớp tin tức đủ nổi bật để tạo lợi thế diễn giải riêng cho nhóm mã theo dõi."))},
+        {"title": "Nội Tạng Thị Trường & Dòng Tiền", "paragraphs": _merge_section_paragraphs(_brief_section(internals_brief), _brief_section(flow_brief))},
+        {"title": "Phân Tích Kỹ Thuật Chuyên Sâu", "paragraphs": _merge_section_paragraphs(_brief_section(deep_technical_brief), _brief_section(technical_brief))},
+        {"title": "Cơ Hội Hành Động" if focus_rows else "Watchlist & No Trade", "paragraphs": _focus_paragraphs(focus_rows, scanner_brief, technical_brief), "bullets": _focus_bullets(focus_rows)},
+        {"title": "Kịch Bản Thị Trường", "paragraphs": _brief_section(scenario_brief, fallback="Kịch bản cơ sở hiện vẫn là theo dõi phản ứng giá thay vì mở rộng vị thế sớm.")},
         {"title": "Kế Hoạch Hành Động", "paragraphs": _merge_section_paragraphs(_brief_section(execution_brief), _brief_section(portfolio_brief))},
         {"title": "Rủi Ro Cần Theo Dõi", "paragraphs": _brief_section(risk_brief, fallback="Rủi ro lớn nhất hiện tại là hành động quá sớm khi thị trường vẫn chưa cho độ lan tỏa đủ mạnh.")},
         {"title": "Kết Luận", "paragraphs": [_closing_paragraph(normalized_synthesis, focus_rows, execution_brief)]},
@@ -55,14 +68,24 @@ def build_chief_analysis(
 
 
 def _build_summary(synthesis: DictStrAny, macro_brief: DictStrAny, scanner_brief: DictStrAny, focus_rows: list[DictStrAny]) -> str:
-    lead_symbol = _text(focus_rows[0].get("symbol")) if focus_rows else "nhóm cổ phiếu ưu tiên"
+    lead_symbol = _text(focus_rows[0].get("symbol")) if focus_rows else "watchlist"
     macro_insight = _text(macro_brief.get("insight"))
     scanner_insight = _text(scanner_brief.get("insight"))
+    market_score = _ensure_dict(synthesis.get("market_score"))
+    bias = _text(market_score.get("bias")).upper()
+    score_text = _text(market_score.get("score"))
+    if not focus_rows:
+        if macro_insight:
+            tail = f" Market score hiện ở mức {score_text}/100 ({bias})." if score_text else ""
+            return f"{macro_insight} Hiện chưa có cổ phiếu nào đạt chuẩn hành động đủ rõ, vì vậy ưu tiên phù hợp vẫn là giữ watchlist gọn và chờ thêm xác nhận.{tail}"
+        return "Bối cảnh hiện tại chưa tạo ra cơ hội hành động đủ rõ; chiến lược hợp lý là giữ watchlist gọn và chờ tín hiệu mạnh hơn."
     if macro_insight and scanner_insight:
-        return f"{macro_insight} {scanner_insight} Trong bối cảnh đó, {lead_symbol} là điểm theo dõi nổi bật nhất hiện tại."
+        tail = f" Market score hiện ở mức {score_text}/100 ({bias})." if score_text else ""
+        return f"{macro_insight} {scanner_insight} Trong bối cảnh đó, {lead_symbol} là điểm theo dõi nổi bật nhất hiện tại.{tail}"
     regime = _localized_regime(_infer_regime_label(synthesis))
     confidence = _localized_confidence(synthesis.get("confidence"))
-    return f"Thị trường hiện nghiêng về trạng thái {regime}. Trong bối cảnh đó, {lead_symbol} là điểm theo dõi nổi bật nhất, nhưng cách tiếp cận phù hợp vẫn là chọn lọc kỹ và giữ kỷ luật vì độ tin cậy dữ liệu đang ở mức {confidence}."
+    tail = f" Market score hiện ở mức {score_text}/100 ({bias})." if score_text else ""
+    return f"Thị trường hiện nghiêng về trạng thái {regime}. Trong bối cảnh đó, {lead_symbol} là điểm theo dõi nổi bật nhất, nhưng cách tiếp cận phù hợp vẫn là chọn lọc kỹ và giữ kỷ luật vì độ tin cậy dữ liệu đang ở mức {confidence}.{tail}"
 
 
 def _executive_paragraphs(synthesis: DictStrAny, focus_rows: list[DictStrAny], portfolio_brief: DictStrAny) -> list[str]:
@@ -105,7 +128,13 @@ def _market_structure_paragraphs(synthesis: DictStrAny) -> list[str]:
 
 def _focus_paragraphs(focus_rows: list[DictStrAny], scanner_brief: DictStrAny, technical_brief: DictStrAny) -> list[str]:
     if not focus_rows:
-        return ["Hiện chưa hình thành được danh sách cơ hội đủ rõ để nâng lên thành watchlist hành động."]
+        tail = _brief_tail(scanner_brief) + _brief_tail(technical_brief)
+        return [
+            "Hiện chưa có mã nào đạt chuẩn để nâng lên thành ý tưởng LONG có thể hành động ngay.",
+            "Danh sách hiện tại nên được hiểu là watchlist theo dõi, chưa phải danh sách giải ngân mới.",
+            "Ưu tiên hợp lý lúc này là giữ vị thế thận trọng, không ép giao dịch chỉ để có lệnh mới.",
+            *tail,
+        ][:4]
     lead = focus_rows[0]
     lead_symbol = _text(lead.get("symbol"))
     thesis = _humanize_thesis(_text(lead.get("thesis"))).lower()
@@ -127,9 +156,12 @@ def _closing_paragraph(synthesis: DictStrAny, focus_rows: list[DictStrAny], exec
     regime = _localized_regime(_infer_regime_label(synthesis))
     stance = _localized_stance(synthesis.get("stance"))
     confidence = _localized_confidence(synthesis.get("confidence"))
-    lead_symbol = _text(focus_rows[0].get("symbol")) if focus_rows else "nhóm cổ phiếu ưu tiên"
+    lead_symbol = _text(focus_rows[0].get("symbol")) if focus_rows else "watchlist"
     extra = _text(execution_brief.get("action"))
-    sentence = f"Tổng kết lại, thị trường đang ở trạng thái {regime}, nên cách tiếp cận phù hợp vẫn là {stance}. {lead_symbol} là điểm theo dõi nổi bật nhất trong nhóm ưu tiên, nhưng việc hành động chỉ nên diễn ra khi cấu trúc giá xác nhận rõ ràng. Trong bối cảnh độ tin cậy đang ở mức {confidence}, kỷ luật giao dịch quan trọng hơn sự hưng phấn ngắn hạn."
+    if focus_rows:
+        sentence = f"Tổng kết lại, thị trường đang ở trạng thái {regime}, nên cách tiếp cận phù hợp vẫn là {stance}. {lead_symbol} là điểm theo dõi nổi bật nhất trong nhóm ưu tiên, nhưng việc hành động chỉ nên diễn ra khi cấu trúc giá xác nhận rõ ràng. Trong bối cảnh độ tin cậy đang ở mức {confidence}, kỷ luật giao dịch quan trọng hơn sự hưng phấn ngắn hạn."
+    else:
+        sentence = f"Tổng kết lại, thị trường đang ở trạng thái {regime}, nên cách tiếp cận phù hợp vẫn là {stance}. Hiện chưa có cổ phiếu nào đủ chuẩn để nâng thành cơ hội LONG rõ ràng, vì vậy ưu tiên hợp lý là giữ watchlist gọn và chờ tín hiệu xác nhận mạnh hơn. Trong bối cảnh độ tin cậy đang ở mức {confidence}, kỷ luật đứng ngoài khi chưa đủ điều kiện cũng quan trọng như kỷ luật vào lệnh."
     if extra:
         sentence += f" {extra}"
     return sentence
@@ -239,13 +271,16 @@ def _text(value: Any) -> str:
 def _humanize_thesis(text: str) -> str:
     cleaned = _clean_sentence(text)
     replacements = {
-        "downtrend": "xu h??ng gi?m",
-        "uptrend": "xu h??ng t?ng",
-        "strong": "t?ch c?c",
-        "negative": "ti?u c?c",
-        "buy_on_pullback": "mua khi ?i?u ch?nh",
-        "breakout_or_wait": "ch? ?i?m b?t ph?",
-        "avoid_or_wait": "?u ti?n quan s?t",
+        "downtrend": "xu hướng giảm",
+        "uptrend": "xu hướng tăng",
+        "strong": "tích cực",
+        "weak": "yếu",
+        "positive": "tích cực vừa phải",
+        "negative": "tiêu cực",
+        "buy_on_pullback": "mua khi điều chỉnh",
+        "breakout_or_wait": "chờ điểm bứt phá",
+        "avoid_or_wait": "ưu tiên quan sát",
+        "No market-wide news detected.": "Hiện chưa có cụm tin thị trường đủ mạnh để tạo lợi thế thông tin rõ rệt.",
     }
     for old, new in replacements.items():
         cleaned = cleaned.replace(old, new)

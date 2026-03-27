@@ -4,6 +4,15 @@ from typing import Any
 
 import pandas as pd
 
+from services.foreign_flow_decoder_service import build_foreign_flow_decoder
+from services.global_domestic_macro_lens_service import build_global_domestic_macro_lens
+from services.market_internals_liquidity_service import build_market_internals_liquidity
+from services.market_score_service import build_market_score
+from services.news_pressure_gauge_service import build_news_pressure_gauge
+from services.scenario_engine_service import build_scenario_engine
+from services.sector_strength_map_service import build_sector_strength_map
+from services.vnindex_vn30_derivatives_state_service import build_vnindex_vn30_derivatives_state
+
 
 DictStrAny = dict[str, Any]
 
@@ -41,7 +50,43 @@ def build_market_synthesis(
         trade_plan_payloads=normalized_trade_plans,
     )
     sector_strength = _build_sector_strength(normalized_market)
+    global_macro_lens = build_global_domestic_macro_lens(
+        market_overview=normalized_market,
+        market_news_summary={},
+        warnings=normalized_warnings,
+    )
+    derivatives_state = build_vnindex_vn30_derivatives_state(
+        market_overview=normalized_market,
+        warnings=normalized_warnings,
+    )
+    foreign_flow_state = build_foreign_flow_decoder(
+        market_overview=normalized_market,
+        ranking_rows=normalized_ranking.fillna("").to_dict(orient="records") if not normalized_ranking.empty else [],
+        warnings=normalized_warnings,
+    )
+    sector_strength_map = build_sector_strength_map(
+        ranking_table=normalized_ranking,
+    )
+    market_internals = build_market_internals_liquidity(
+        market_overview=normalized_market,
+        ranking_rows=normalized_ranking.fillna("").to_dict(orient="records") if not normalized_ranking.empty else [],
+    )
+    news_pressure = build_news_pressure_gauge(
+        market_news_summary={},
+        warnings=normalized_warnings,
+    )
+    scenario_engine = build_scenario_engine(
+        market_overview=normalized_market,
+        long_candidates={"selected": top_stock_focus},
+        sector_strength=sector_strength_map,
+    )
+    market_score = build_market_score(
+        market_overview=normalized_market,
+        long_candidates={"selected": top_stock_focus},
+        sector_strength=sector_strength_map,
+    )
     macro_and_sentiment = _build_macro_and_sentiment(regime, index_context, normalized_warnings)
+    macro_and_sentiment.extend(global_macro_lens.get("drivers", [])[:2])
     market_state = _build_market_state(regime, breadth, index_context, normalized_execution)
     flow_of_funds = _build_flow_of_funds(liquidity_concentration, normalized_market, normalized_ranking)
     action_plan = _build_action_plan(
@@ -67,8 +112,15 @@ def build_market_synthesis(
         "confidence": _infer_confidence(normalized_execution, normalized_warnings),
         "macro_and_sentiment": macro_and_sentiment,
         "market_state": market_state,
+        "derivatives_state": derivatives_state,
+        "foreign_flow_state": foreign_flow_state,
         "flow_of_funds": flow_of_funds,
         "sector_strength": sector_strength,
+        "sector_strength_map": sector_strength_map,
+        "market_internals": market_internals,
+        "news_pressure": news_pressure,
+        "scenarios": scenario_engine,
+        "market_score": market_score,
         "top_stock_focus": top_stock_focus,
         "action_plan": action_plan,
         "risk_watch": risk_watch,

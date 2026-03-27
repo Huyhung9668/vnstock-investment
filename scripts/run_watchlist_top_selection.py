@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -92,13 +93,64 @@ def _load_symbols(watchlist_payload: dict[str, Any], limit: int) -> list[str]:
     return symbols
 
 
+def _candidate_config_dirs(source_config_dir: Path, watchlist_limit: int) -> list[Path]:
+    root_config_dir = PROJECT_ROOT / "config"
+    candidates: list[Path] = [source_config_dir]
+
+    if source_config_dir == root_config_dir:
+        candidates.extend(
+            [
+                root_config_dir / f"test{watchlist_limit}",
+                root_config_dir / "test100",
+                root_config_dir / "test50",
+                root_config_dir / "test20",
+            ]
+        )
+    elif source_config_dir.parent == root_config_dir:
+        candidates.extend(
+            [
+                root_config_dir / f"test{watchlist_limit}",
+                root_config_dir / "test100",
+                root_config_dir / "test50",
+                root_config_dir / "test20",
+                root_config_dir,
+            ]
+        )
+
+    unique_candidates: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique_candidates.append(resolved)
+    return unique_candidates
+
+
+def _resolve_source_config_dir(source_config_dir: Path, watchlist_limit: int, top_n: int) -> Path:
+    fallback_dir: Path | None = None
+    for candidate in _candidate_config_dirs(source_config_dir, watchlist_limit):
+        watchlist_payload = _load_yaml(candidate / "watchlist.yaml")
+        symbols = _load_symbols(watchlist_payload, watchlist_limit)
+        if len(symbols) >= watchlist_limit:
+            return candidate
+        if len(symbols) >= top_n and fallback_dir is None:
+            fallback_dir = candidate
+    return fallback_dir or source_config_dir
+
+
 def _scan_watchlist(symbols: list[str]) -> pd.DataFrame:
+    request_delay_seconds = 1.1
+    batch_size = 45
+    batch_sleep_seconds = 20.0
     rows: list[dict[str, Any]] = []
     for index, symbol in enumerate(symbols, start=1):
         print(f"[scan] {index}/{len(symbols)} {symbol}")
-        price_df = universe_scan.get_price_data(symbol)
+        price_df = _get_price_data_with_retry(symbol)
         metrics = universe_scan.compute_metrics(price_df)
         if metrics is None:
+            time.sleep(request_delay_seconds)
             continue
         rows.append(
             {
@@ -110,6 +162,10 @@ def _scan_watchlist(symbols: list[str]) -> pd.DataFrame:
                 "risk_halt_flag": 0,
             }
         )
+        time.sleep(request_delay_seconds)
+        if index % batch_size == 0 and index < len(symbols):
+            print(f"[scan] sleep {batch_sleep_seconds:.0f}s to avoid rate limit")
+            time.sleep(batch_sleep_seconds)
 
     if not rows:
         raise RuntimeError("Watchlist scan returned no usable rows.")
@@ -118,6 +174,19 @@ def _scan_watchlist(symbols: list[str]) -> pd.DataFrame:
     RAW_SCAN_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(RAW_SCAN_OUTPUT, index=False)
     return df
+
+
+def _get_price_data_with_retry(symbol: str, max_attempts: int = 3) -> pd.DataFrame | None:
+    backoff_seconds = [0.0, 18.0, 30.0]
+    for attempt in range(max_attempts):
+        price_df = universe_scan.get_price_data(symbol)
+        if price_df is not None:
+            return price_df
+        sleep_for = backoff_seconds[min(attempt, len(backoff_seconds) - 1)]
+        if sleep_for > 0 and attempt < max_attempts - 1:
+            print(f"[scan] retry {symbol} after {sleep_for:.0f}s")
+            time.sleep(sleep_for)
+    return None
 
 
 def _write_rank_outputs(scanned_df: pd.DataFrame, top_n: int) -> list[str]:
@@ -169,6 +238,7 @@ def _prepare_generated_config(*, source_config_dir: Path, ranked_symbols: list[s
     runtime_payload = _load_yaml(source_config_dir / "runtime.yaml")
     sources_payload = _load_yaml(source_config_dir / "sources.yaml")
     universe_payload = _load_yaml(source_config_dir / "universe.yaml")
+    sources_payload = _normalize_sources_payload(sources_payload)
 
     runtime_payload.setdefault("selection", {})
     runtime_payload["selection"]["mode"] = "watchlist"
@@ -193,6 +263,33 @@ def _prepare_generated_config(*, source_config_dir: Path, ranked_symbols: list[s
     return generated_dir
 
 
+def _normalize_sources_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    providers = payload.get("providers")
+    if isinstance(providers, dict):
+        normalized = dict(payload)
+        services = normalized.get("services")
+        if not isinstance(services, dict):
+            normalized["services"] = {
+                "market": providers.get("primary", "free"),
+                "news": providers.get("primary", "free"),
+                "financials": providers.get("primary", "free"),
+            }
+        return normalized
+
+    provider = str(payload.get("provider") or "free").strip().lower() or "free"
+    return {
+        "providers": {
+            "primary": provider,
+            "fallback": provider,
+        },
+        "services": {
+            "market": str(payload.get("market_data") or provider).strip().lower() or provider,
+            "news": str(payload.get("news") or provider).strip().lower() or provider,
+            "financials": str(payload.get("financials") or provider).strip().lower() or provider,
+        },
+    }
+
+
 def _run_daily(config_dir: Path) -> dict[str, Any]:
     original_parse_args = daily_run.parse_args
     try:
@@ -204,11 +301,13 @@ def _run_daily(config_dir: Path) -> dict[str, Any]:
 
 def main() -> int:
     args = parse_args()
-    source_config_dir = Path(args.config_dir).resolve()
+    source_config_dir = _resolve_source_config_dir(Path(args.config_dir).resolve(), args.watchlist_limit, args.top_n)
     watchlist_payload = _load_yaml(source_config_dir / "watchlist.yaml")
     symbols = _load_symbols(watchlist_payload, args.watchlist_limit)
     if len(symbols) < args.top_n:
-        raise ValueError(f"Need at least {args.top_n} symbols, got {len(symbols)}")
+        raise ValueError(
+            f"Need at least {args.top_n} symbols, got {len(symbols)} from {source_config_dir / 'watchlist.yaml'}"
+        )
 
     _clear_runtime_proxies()
     daily_run.load_dotenv_if_present()
@@ -233,8 +332,7 @@ def main() -> int:
     print(f"- generated_config_dir={generated_config_dir}")
     print(f"- run_id={summary.get('run_id')}")
     headline = str(summary.get('headline', ''))
-    safe_headline = headline.encode('cp1252', errors='replace').decode('cp1252')
-    print(f"- headline={safe_headline}")
+    print(f"- headline={headline}")
     print(f"- output_dir={summary.get('artifacts_output_dir')}")
     print(f"- manifest_path={summary.get('manifest_path')}")
     return 0

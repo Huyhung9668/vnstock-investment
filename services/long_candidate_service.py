@@ -74,13 +74,24 @@ def build_long_candidates(
         is_long_ready = (
             (day_change is not None and day_change > 0)
             and (period_change is not None and period_change > 0)
+            and (volume_ratio is not None and volume_ratio >= 1.0)
+            and (risk_reward is not None and risk_reward >= 2.0)
             and setup_type in {"pullback_buy", "breakout_or_wait"}
         )
+        watchlist_ready = (
+            not is_long_ready
+            and setup_type in {"pullback_buy", "breakout_or_wait"}
+            and risk_reward is not None
+            and risk_reward >= 1.5
+        )
+        state = "LONG_READY" if is_long_ready else ("WATCHLIST_ONLY" if watchlist_ready else "AVOID")
 
         candidates.append(
             {
                 "symbol": symbol,
+                "state": state,
                 "is_long_ready": is_long_ready,
+                "watchlist_ready": watchlist_ready,
                 "long_score": round(long_score, 4),
                 "score": score,
                 "day_change_pct": day_change,
@@ -109,21 +120,25 @@ def build_long_candidates(
     )
 
     selected = [item for item in candidates if bool(item.get("is_long_ready"))][:top_n]
-    fallback = candidates[:top_n] if len(selected) < top_n else []
+    watchlist_only = [item for item in candidates if str(item.get("state")) == "WATCHLIST_ONLY"][:top_n]
+    avoid = [item for item in candidates if str(item.get("state")) == "AVOID"][:top_n]
 
     return {
         "status": "ready" if candidates else "missing",
         "selected": selected,
-        "fallback_selected": fallback,
+        "watchlist_only": watchlist_only,
+        "avoid": avoid,
         "all_candidates": candidates[:15],
-        "headline": _build_headline(selected),
+        "headline": _build_headline(selected, watchlist_only),
         "selection_rule": "Ưu tiên mã tăng trong phiên, tăng trên chu kỳ theo dõi, có setup LONG rõ và RR đủ hấp dẫn.",
     }
 
 
-def _build_headline(selected: list[DictStrAny]) -> str:
+def _build_headline(selected: list[DictStrAny], watchlist_only: list[DictStrAny]) -> str:
     if not selected:
-        return "Chưa có đủ cổ phiếu đạt chuẩn LONG khỏe; cần tiếp tục quan sát thay vì ép chọn đủ số lượng."
+        if watchlist_only:
+            return "Hiện chưa có mã đạt chuẩn LONG khỏe; chỉ nên giữ một số mã ở trạng thái theo dõi, chưa vội giải ngân."
+        return "Hiện chưa có mã nào đạt chuẩn LONG khỏe; ưu tiên đứng ngoài và chờ tín hiệu mạnh hơn."
     return "Top LONG hiện tại tập trung vào " + ", ".join(item["symbol"] for item in selected[:3]) + "."
 
 

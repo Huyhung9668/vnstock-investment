@@ -420,7 +420,7 @@ def generate_trade_plan(analysis: dict[str, Any]) -> dict[str, Any]:
     return {
         "symbol": context.symbol,
         "setup_type": _infer_setup_type(context),
-        "thesis": _build_thesis(context),
+        "thesis": _clean_thesis_output(context),
         "entry_zone": entry_zone,
         "confirmation": _build_confirmation(context, entry_zone),
         "invalidation": _build_invalidation(context, entry_zone),
@@ -432,6 +432,46 @@ def generate_trade_plan(analysis: dict[str, Any]) -> dict[str, Any]:
         "notes": notes,
         "degraded_mode": degraded_mode,
     }
+
+
+def _clean_thesis_output(context: TradePlanContext) -> str:
+    parts: list[str] = []
+    trend = _localized_trend_label(context.trend)
+    momentum = _localized_momentum_label(context.momentum)
+    if trend:
+        parts.append(f"Xu hướng hiện tại nghiêng về {trend}.")
+    else:
+        parts.append("Xu hướng hiện tại chưa thật sự rõ ràng.")
+    if momentum:
+        parts.append(f"Động lượng đang ở trạng thái {momentum}.")
+    if context.catalysts:
+        parts.append(f"Catalyst đáng chú ý: {', '.join(context.catalysts[:3])}.")
+    if context.risks:
+        parts.append(f"Rủi ro cần theo dõi: {', '.join(context.risks[:3])}.")
+    return " ".join(parts).strip()
+
+
+def _localized_trend_label(value: str) -> str:
+    mapping = {
+        "uptrend": "xu hướng tăng",
+        "downtrend": "xu hướng giảm",
+        "sideway": "đi ngang",
+        "neutral": "trung tính",
+    }
+    normalized = str(value or "").strip().lower()
+    return mapping.get(normalized, normalized)
+
+
+def _localized_momentum_label(value: str) -> str:
+    mapping = {
+        "strong": "tích cực",
+        "weak": "yếu",
+        "positive": "tích cực vừa phải",
+        "negative": "tiêu cực",
+        "neutral": "trung tính",
+    }
+    normalized = str(value or "").strip().lower()
+    return mapping.get(normalized, normalized)
 
 
 def render_trade_plan(package: AnalysisPackage) -> str:
